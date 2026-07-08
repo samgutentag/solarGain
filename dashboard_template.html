@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solar Gain — House Thermal Study</title>
+<style>
+  :root {
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --c-outdoor: #2a78d6;
+    --c-attic: #eb6834;
+    --c-solar: #eda100;
+    --c-console: #4a3aa7;
+    --c-room: #1baf7a;
+    --c-delta-warm: #e34948;
+    --c-delta-cool: #2a78d6;
+    --c-context: #898781;
+    --ac-band: rgba(42, 120, 214, 0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --c-outdoor: #3987e5;
+      --c-attic: #d95926;
+      --c-solar: #c98500;
+      --c-console: #9085e9;
+      --c-room: #199e70;
+      --c-delta-warm: #e66767;
+      --c-delta-cool: #3987e5;
+      --ac-band: rgba(57, 135, 229, 0.14);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0 }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: var(--page);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.45;
+    padding: 24px;
+    max-width: 1240px;
+    margin: 0 auto;
+  }
+  header h1 { font-size: 22px; font-weight: 650 }
+  header p { color: var(--text-secondary); margin-top: 4px }
+  .filters { display: flex; gap: 8px; margin: 20px 0 16px; flex-wrap: wrap }
+  .filters button {
+    font: inherit; color: var(--text-secondary);
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 14px; cursor: pointer;
+  }
+  .filters button:hover { color: var(--text-primary) }
+  .filters button.active { color: var(--text-primary); font-weight: 600; border-color: var(--text-muted) }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px }
+  .tile {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .tile .label { color: var(--text-secondary); font-size: 12.5px }
+  .tile .value { font-size: 26px; font-weight: 600; margin-top: 2px }
+  .tile .sub { color: var(--text-muted); font-size: 12px; margin-top: 2px }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
+  }
+  .card h2 { font-size: 15px; font-weight: 650 }
+  .card .sub { color: var(--text-secondary); font-size: 12.5px; margin: 2px 0 10px }
+  .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px }
+  .table-toggle {
+    font: inherit; font-size: 12px; color: var(--text-muted);
+    background: none; border: none; cursor: pointer; text-decoration: underline;
+  }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; font-size: 12.5px; color: var(--text-secondary) }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px }
+  .legend .swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block }
+  .legend .swatch.band { width: 14px; height: 10px; border-radius: 2px }
+  .chart-wrap { position: relative }
+  svg { display: block; width: 100%; height: auto }
+  svg text { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif }
+  .tooltip {
+    position: absolute; pointer-events: none; display: none; z-index: 5;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); min-width: 150px;
+  }
+  .tooltip .tt-time { color: var(--text-muted); margin-bottom: 4px }
+  .tooltip .tt-row { display: flex; align-items: center; gap: 6px; margin-top: 2px }
+  .tooltip .tt-key { width: 10px; height: 3px; border-radius: 2px; flex: none }
+  .tooltip .tt-val { font-weight: 600 }
+  .tooltip .tt-name { color: var(--text-secondary) }
+  .grid-panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px }
+  .panel { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 6px }
+  .panel h3 { font-size: 13px; font-weight: 600 }
+  .panel .now { color: var(--text-secondary); font-size: 12px; font-weight: 400 }
+  .dtable { display: none; max-height: 320px; overflow: auto; margin-top: 10px; border-top: 1px solid var(--grid) }
+  .dtable table { border-collapse: collapse; width: 100%; font-size: 12px }
+  .dtable th, .dtable td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums }
+  .dtable th:first-child, .dtable td:first-child { text-align: left }
+  .dtable th { position: sticky; top: 0; background: var(--surface-1); color: var(--text-secondary); font-weight: 600 }
+  .insights ul { margin: 6px 0 0 18px; color: var(--text-primary) }
+  .insights li { margin-top: 6px }
+  .insights .num { font-weight: 650 }
+  footer { color: var(--text-muted); font-size: 12px; margin-top: 8px }
+</style>
+</head>
+<body data-palette="#2a78d6,#1baf7a,#eda100,#4a3aa7,#e34948,#eb6834">
+
+<header>
+  <h1>Solar Gain — House Thermal Study</h1>
+  <p>Outdoor air vs attic vs rooms, with roof solar production as the irradiance proxy.
+     Office excluded (separate attic). Generated __GENERATED_AT__.</p>
+</header>
+
+<div class="filters" id="filters"></div>
+<div class="kpis" id="kpis"></div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Solar drives the attic</h2>
+      <div class="sub">Temperatures above, solar production below, on the same clock. Watch the attic trace the sun with a lag.</div>
+    </div>
+    <button class="table-toggle" data-table="driver">table</button>
+  </div>
+  <div class="legend" id="legend-driver"></div>
+  <div class="chart-wrap" id="chart-driver"></div>
+  <div class="chart-wrap" id="chart-solar"></div>
+  <div class="dtable" id="table-driver"></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Attic heat load: attic minus outdoor</h2>
+      <div class="sub">Positive means the attic is a radiator sitting on the ceiling. The evening tail is stored heat, not sun.</div>
+    </div>
+    <button class="table-toggle" data-table="delta">table</button>
+  </div>
+  <div class="chart-wrap" id="chart-delta"></div>
+  <div class="dtable" id="table-delta"></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Room by room</h2>
+      <div class="sub">Each room (green) against outdoor and attic context (gray). Shared temperature scale. Blue bands mark that room's AC running.</div>
+    </div>
+    <button class="table-toggle" data-table="rooms">table</button>
+  </div>
+  <div class="legend" id="legend-rooms"></div>
+  <div class="grid-panels" id="panels"></div>
+  <div class="dtable" id="table-rooms"></div>
+</div>
+
+<div class="card insights">
+  <h2>What the data says</h2>
+  <ul id="insights"></ul>
+</div>
+
+<footer>Data: Home Assistant recorder, 10-minute means. Rebuild with <code>./run.sh</code>.</footer>
+
+<script>
+const DATA = __DATA_JSON__
+
+const TZ = DATA.timezone
+const fmtTime = ts => new Date(ts * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: TZ })
+const fmtDay = ts => new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: TZ })
+const fmtStamp = ts => `${fmtDay(ts)} ${fmtTime(ts)}`
+const localDay = ts => new Date(ts * 1000).toLocaleDateString('en-CA', { timeZone: TZ })
+
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+
+// ---- range filter -----------------------------------------------------------
+const now = DATA.range.end
+const PRESETS = [
+  { id: 'today', label: 'Today', start: () => { const d = new Date(now * 1000); const s = new Date(d.toLocaleDateString('en-US', { timeZone: TZ }) + ' 00:00:00'); return Math.floor(s.getTime() / 1000) } },
+  { id: '24h', label: '24 h', start: () => now - 86400 },
+  { id: '3d', label: '3 days', start: () => now - 3 * 86400 },
+  { id: '7d', label: '7 days', start: () => now - 7 * 86400 },
+  { id: 'all', label: 'All', start: () => DATA.range.start },
+]
+let range = { start: PRESETS[1].start(), end: now, id: '24h' }
+
+function clip (points, r) {
+  return points.filter(p => p[0] >= r.start && p[0] <= r.end)
+}
+
+// ---- svg chart engine -------------------------------------------------------
+const NS = 'http://www.w3.org/2000/svg'
+function el (tag, attrs, parent) {
+  const node = document.createElementNS(NS, tag)
+  for (const key in attrs) node.setAttribute(key, attrs[key])
+  if (parent) parent.appendChild(node)
+  return node
+}
+
+function niceTicks (lo, hi, count) {
+  const span = hi - lo || 1
+  const step0 = span / count
+  const mag = Math.pow(10, Math.floor(Math.log10(step0)))
+  const step = [1, 2, 5, 10].map(m => m * mag).find(s => span / s <= count) || 10 * mag
+  const ticks = []
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) ticks.push(Math.round(v * 100) / 100)
+  return ticks
+}
+
+function timeTicks (r) {
+  const span = r.end - r.start
+  const ticks = []
+  if (span <= 2 * 86400) {
+    const stepH = span <= 86400 ? 3 : 6
+    const start = new Date(r.start * 1000)
+    start.setMinutes(0, 0, 0)
+    for (let t = Math.floor(start.getTime() / 1000); t <= r.end; t += 3600) {
+      const h = parseInt(new Date(t * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: TZ }), 10)
+      if (h % stepH === 0 && t >= r.start) ticks.push({ t, label: fmtTime(t).replace(':00', '') })
+    }
+  } else {
+    let prevDay = ''
+    for (let t = r.start; t <= r.end; t += 3600) {
+      const day = localDay(t)
+      if (day !== prevDay) {
+        const hour = new Date(t * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: TZ })
+        if (parseInt(hour, 10) === 0 || t === r.start) ticks.push({ t, label: fmtDay(t) })
+        prevDay = day
+      }
+    }
+  }
+  return ticks
+}
+
+// series: [{ points, color, width, wash }]  bands: [[start, end]]
+function drawChart (mount, opts) {
+  mount.innerHTML = ''
+  const W = opts.width || mount.clientWidth || 1100
+  const H = opts.height || 220
+  const M = { top: 10, right: 14, bottom: opts.xAxis === false ? 6 : 26, left: 44 }
+  const pw = W - M.left - M.right
+  const ph = H - M.top - M.bottom
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}` }, mount)
+
+  const r = opts.range
+  let lo = Infinity, hi = -Infinity
+  for (const s of opts.series) for (const p of s.points) { if (p[1] < lo) lo = p[1]; if (p[1] > hi) hi = p[1] }
+  if (opts.yDomain) { lo = opts.yDomain[0]; hi = opts.yDomain[1] }
+  if (!isFinite(lo)) { lo = 0; hi = 1 }
+  if (opts.includeZero && lo > 0) lo = 0
+  const pad = (hi - lo) * 0.08 || 1
+  lo -= pad; hi += pad
+
+  const x = t => M.left + (t - r.start) / (r.end - r.start) * pw
+  const y = v => M.top + (hi - v) / (hi - lo) * ph
+
+  for (const band of opts.bands || []) {
+    const x0 = Math.max(x(band[0]), M.left)
+    const x1 = Math.min(x(band[1]), M.left + pw)
+    if (x1 > x0) el('rect', { x: x0, y: M.top, width: x1 - x0, height: ph, fill: cssVar('--ac-band') }, svg)
+  }
+
+  const yTicks = niceTicks(lo, hi, 5)
+  for (const v of yTicks) {
+    el('line', { x1: M.left, x2: M.left + pw, y1: y(v), y2: y(v), stroke: cssVar('--grid'), 'stroke-width': 1 }, svg)
+    el('text', { x: M.left - 8, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: cssVar('--text-muted') }, svg).textContent = String(v)
+  }
+  if (opts.zeroLine && lo < 0 && hi > 0) {
+    el('line', { x1: M.left, x2: M.left + pw, y1: y(0), y2: y(0), stroke: cssVar('--baseline'), 'stroke-width': 1.5 }, svg)
+  }
+  if (opts.xAxis !== false) {
+    for (const tick of timeTicks(r)) {
+      el('text', { x: x(tick.t), y: H - 8, 'text-anchor': 'middle', 'font-size': 11, fill: cssVar('--text-muted') }, svg).textContent = tick.label
+    }
+  }
+  el('line', { x1: M.left, x2: M.left + pw, y1: M.top + ph, y2: M.top + ph, stroke: cssVar('--baseline'), 'stroke-width': 1 }, svg)
+
+  for (const s of opts.series) {
+    if (!s.points.length) continue
+    const pts = s.points.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ')
+    if (s.wash) {
+      const first = s.points[0], last = s.points[s.points.length - 1]
+      const zero = y(Math.max(lo, 0))
+      el('polygon', {
+        points: `${x(first[0]).toFixed(1)},${zero} ${pts} ${x(last[0]).toFixed(1)},${zero}`,
+        fill: s.color, opacity: 0.10,
+      }, svg)
+    }
+    el('polyline', {
+      points: pts, fill: 'none', stroke: s.color,
+      'stroke-width': s.width || 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+      opacity: s.opacity || 1,
+    }, svg)
+  }
+
+  attachHover(mount, svg, opts, { x, y, M, pw, ph, r })
+  return svg
+}
+
+function attachHover (mount, svg, opts, geo) {
+  const tip = document.createElement('div')
+  tip.className = 'tooltip'
+  mount.appendChild(tip)
+  const cross = el('line', { y1: geo.M.top, y2: geo.M.top + geo.ph, stroke: cssVar('--baseline'), 'stroke-width': 1, visibility: 'hidden' }, svg)
+
+  svg.addEventListener('pointermove', ev => {
+    const rect = svg.getBoundingClientRect()
+    const frac = (ev.clientX - rect.left) / rect.width
+    const t = geo.r.start + Math.max(0, Math.min(1, (frac * (geo.pw + geo.M.left + 14) - geo.M.left / 1) / geo.pw)) * (geo.r.end - geo.r.start)
+    let best = null
+    const rows = []
+    for (const s of opts.series) {
+      if (!s.points.length || s.skipTooltip) continue
+      let nearest = s.points[0]
+      for (const p of s.points) if (Math.abs(p[0] - t) < Math.abs(nearest[0] - t)) nearest = p
+      rows.push({ s, p: nearest })
+      if (!best || Math.abs(nearest[0] - t) < Math.abs(best - t)) best = nearest[0]
+    }
+    if (best == null) return
+    cross.setAttribute('x1', geo.x(best)); cross.setAttribute('x2', geo.x(best))
+    cross.setAttribute('visibility', 'visible')
+    tip.textContent = ''
+    const timeRow = document.createElement('div')
+    timeRow.className = 'tt-time'
+    timeRow.textContent = fmtStamp(best)
+    tip.appendChild(timeRow)
+    for (const row of rows) {
+      const div = document.createElement('div')
+      div.className = 'tt-row'
+      const key = document.createElement('span')
+      key.className = 'tt-key'
+      key.style.background = row.s.color
+      const val = document.createElement('span')
+      val.className = 'tt-val'
+      val.textContent = `${row.p[1].toFixed(1)}${row.s.unit || '°F'}`
+      const name = document.createElement('span')
+      name.className = 'tt-name'
+      name.textContent = row.s.label
+      div.append(key, val, name)
+      tip.appendChild(div)
+    }
+    tip.style.display = 'block'
+    const px = geo.x(best) / (geo.pw + geo.M.left + geo.M.right) * mount.clientWidth
+    tip.style.left = Math.min(px + 14, mount.clientWidth - 170) + 'px'
+    tip.style.top = '10px'
+  })
+  svg.addEventListener('pointerleave', () => {
+    tip.style.display = 'none'
+    cross.setAttribute('visibility', 'hidden')
+  })
+}
+
+// ---- legends ---------------------------------------------------------------
+function legend (mount, items) {
+  mount.textContent = ''
+  for (const item of items) {
+    const key = document.createElement('span')
+    key.className = 'key'
+    const swatch = document.createElement('span')
+    swatch.className = 'swatch' + (item.band ? ' band' : '')
+    swatch.style.background = item.color
+    const label = document.createElement('span')
+    label.textContent = item.label
+    key.append(swatch, label)
+    mount.appendChild(key)
+  }
+}
+
+// ---- data helpers ------------------------------------------------------------
+const S = DATA.series
+const roomKeys = Object.keys(S).filter(k => S[k].group === 'room')
+const refKeys = Object.keys(S).filter(k => S[k].group === 'reference')
+
+function deltaSeries (r) {
+  const out = clip(S.outdoor.points, r)
+  const attic = clip(S.attic.points, r)
+  const byT = new Map(out.map(p => [p[0], p[1]]))
+  return attic.filter(p => byT.has(p[0])).map(p => [p[0], Math.round((p[1] - byT.get(p[0])) * 100) / 100])
+}
+
+function acBands (key, r) {
+  const unit = DATA.climate[key]
+  if (!unit) return []
+  return unit.segments.filter(seg => seg[1] > r.start && seg[0] < r.end)
+}
+
+function seriesMax (points) {
+  let best = null
+  for (const p of points) if (!best || p[1] > best[1]) best = p
+  return best
+}
+
+// ---- KPIs & insights ----------------------------------------------------------
+function computeStats (r) {
+  const attic = clip(S.attic.points, r)
+  const outdoor = clip(S.outdoor.points, r)
+  const solar = clip(S.solar_power.points, r)
+  const delta = deltaSeries(r)
+  const atticPeak = seriesMax(attic)
+  const outdoorPeak = seriesMax(outdoor)
+  const deltaPeak = seriesMax(delta)
+  const solarPeak = seriesMax(solar)
+
+  // per-day lag between solar peak and attic peak
+  const days = {}
+  for (const p of clip(S.solar_power.points, r)) (days[localDay(p[0])] = days[localDay(p[0])] || { solar: [], attic: [] }).solar.push(p)
+  for (const p of attic) if (days[localDay(p[0])]) days[localDay(p[0])].attic.push(p)
+  const lags = []
+  for (const day in days) {
+    const sp = seriesMax(days[day].solar), ap = seriesMax(days[day].attic)
+    if (sp && ap && sp[1] > 1 && days[day].solar.length > 30) {
+      const lag = ap[0] - sp[0]
+      if (lag > 0 && lag < 8 * 3600) lags.push(lag)
+    }
+  }
+  lags.sort((a, b) => a - b)
+  const medianLag = lags.length ? lags[Math.floor(lags.length / 2)] : null
+
+  let acSeconds = 0
+  for (const key of ['bedroom_ac', 'living_room_ac']) {
+    for (const seg of acBands(key, r)) acSeconds += Math.min(seg[1], r.end) - Math.max(seg[0], r.start)
+  }
+
+  // evening crossover: first time after 4pm when outdoor < mean room temp
+  const roomAvg = new Map()
+  for (const key of roomKeys) {
+    for (const p of clip(S[key].points, r)) {
+      const cur = roomAvg.get(p[0]) || [0, 0]
+      roomAvg.set(p[0], [cur[0] + p[1], cur[1] + 1])
+    }
+  }
+  const crossovers = []
+  let crossed = {}
+  for (const p of outdoor) {
+    const avg = roomAvg.get(p[0])
+    if (!avg) continue
+    const day = localDay(p[0])
+    const hour = parseInt(new Date(p[0] * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: TZ }), 10)
+    if (hour >= 16 && !crossed[day] && p[1] < avg[0] / avg[1]) {
+      crossed[day] = true
+      crossovers.push(p[0])
+    }
+  }
+
+  return { atticPeak, outdoorPeak, deltaPeak, solarPeak, medianLag, acSeconds, crossovers, lagsCount: lags.length }
+}
+
+function fmtDur (sec) {
+  const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60)
+  return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`
+}
+
+function renderKpis (stats) {
+  const mount = document.getElementById('kpis')
+  mount.textContent = ''
+  const tiles = [
+    { label: 'Attic peak', value: stats.atticPeak ? stats.atticPeak[1].toFixed(1) + '°F' : '—', sub: stats.atticPeak ? fmtStamp(stats.atticPeak[0]) : '' },
+    { label: 'Outdoor peak', value: stats.outdoorPeak ? stats.outdoorPeak[1].toFixed(1) + '°F' : '—', sub: stats.outdoorPeak ? fmtStamp(stats.outdoorPeak[0]) : '' },
+    { label: 'Max attic − outdoor', value: stats.deltaPeak ? '+' + stats.deltaPeak[1].toFixed(1) + '°F' : '—', sub: stats.deltaPeak ? fmtStamp(stats.deltaPeak[0]) : '' },
+    { label: 'Attic lag after solar peak', value: stats.medianLag ? fmtDur(stats.medianLag) : '—', sub: stats.lagsCount ? `median of ${stats.lagsCount} day(s)` : 'needs a sunny day in range' },
+    { label: 'Portable AC runtime', value: fmtDur(stats.acSeconds), sub: 'bedroom + living room' },
+  ]
+  for (const t of tiles) {
+    const div = document.createElement('div')
+    div.className = 'tile'
+    const l = document.createElement('div'); l.className = 'label'; l.textContent = t.label
+    const v = document.createElement('div'); v.className = 'value'; v.textContent = t.value
+    const s = document.createElement('div'); s.className = 'sub'; s.textContent = t.sub
+    div.append(l, v, s)
+    mount.appendChild(div)
+  }
+}
+
+function renderInsights (stats, r) {
+  const mount = document.getElementById('insights')
+  mount.textContent = ''
+  const add = html => { const li = document.createElement('li'); li.innerHTML = html; mount.appendChild(li) }
+  const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+
+  if (stats.atticPeak && stats.outdoorPeak) {
+    add(`Attic peaked at <span class="num">${stats.atticPeak[1].toFixed(1)}°F</span> vs an outdoor peak of ` +
+        `<span class="num">${stats.outdoorPeak[1].toFixed(1)}°F</span> — the roof adds ` +
+        `<span class="num">${(stats.atticPeak[1] - stats.outdoorPeak[1]).toFixed(1)}°F</span> on top of the weather.`)
+  }
+  if (stats.medianLag) {
+    add(`The attic peaks about <span class="num">${esc(fmtDur(stats.medianLag))}</span> after solar production peaks — that lag is heat soaking through the roof deck, and it keeps radiating into the evening.`)
+  }
+  if (stats.crossovers.length) {
+    const mins = stats.crossovers.map(t => { const d = new Date(t * 1000); return parseInt(d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: TZ }), 10) * 60 + d.getMinutes() }).sort((a, b) => a - b)
+    const med = mins[Math.floor(mins.length / 2)]
+    const hh = Math.floor(med / 60) % 24, mm = med % 60
+    const label = new Date(2000, 0, 1, hh, mm).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    add(`Evenings, outdoor air drops below the average room temperature around <span class="num">${esc(label)}</span> — after that, moving outside air in beats running compressors.`)
+  }
+  // AC effect: bedroom vs north bedroom while bedroom AC runs
+  const bands = acBands('bedroom_ac', r)
+  if (bands.length && S.bedroom && S.north_bedroom) {
+    const north = new Map(clip(S.north_bedroom.points, r).map(p => [p[0], p[1]]))
+    let sum = 0, n = 0
+    for (const p of clip(S.bedroom.points, r)) {
+      if (north.has(p[0]) && bands.some(b => p[0] >= b[0] && p[0] <= b[1])) { sum += north.get(p[0]) - p[1]; n++ }
+    }
+    if (n > 5) add(`While the bedroom AC runs, the bedroom sits <span class="num">${(sum / n).toFixed(1)}°F</span> cooler than the unconditioned North Bedroom — that gap is what the compressor is buying.`)
+  }
+}
+
+// ---- tables -------------------------------------------------------------------
+function renderTable (mount, cols, r) {
+  mount.textContent = ''
+  const table = document.createElement('table')
+  const head = table.insertRow()
+  const th0 = document.createElement('th'); th0.textContent = 'Time'; head.appendChild(th0)
+  for (const c of cols) { const th = document.createElement('th'); th.textContent = c.label; head.appendChild(th) }
+  const maps = cols.map(c => new Map(clip(c.points, r).filter(p => p[0] % 3600 < 600).map(p => [p[0] - p[0] % 3600, p[1]])))
+  const times = [...new Set(maps.flatMap(m => [...m.keys()]))].sort()
+  for (const t of times) {
+    const row = table.insertRow()
+    row.insertCell().textContent = fmtStamp(t)
+    maps.forEach(m => { row.insertCell().textContent = m.has(t) ? m.get(t).toFixed(1) : '' })
+  }
+  mount.appendChild(table)
+}
+
+// ---- render all -----------------------------------------------------------------
+function render () {
+  const r = range
+  const stats = computeStats(r)
+  renderKpis(stats)
+  renderInsights(stats, r)
+
+  const cOut = cssVar('--c-outdoor'), cAttic = cssVar('--c-attic'), cSolar = cssVar('--c-solar')
+  const cConsole = cssVar('--c-console'), cRoom = cssVar('--c-room'), cCtx = cssVar('--c-context')
+
+  const driverSeries = [
+    { points: clip(S.outdoor.points, r), color: cOut, label: 'Outdoor' },
+    { points: clip(S.attic.points, r), color: cAttic, label: 'Attic' },
+    { points: clip(S.ecowitt_console.points, r), color: cConsole, label: 'Ecowitt console', opacity: 0.75 },
+  ]
+  legend(document.getElementById('legend-driver'), [
+    { color: cOut, label: 'Outdoor' }, { color: cAttic, label: 'Attic' },
+    { color: cConsole, label: 'Ecowitt console (location TBD)' }, { color: cSolar, label: 'Solar production (lower chart)' },
+  ])
+  drawChart(document.getElementById('chart-driver'), { series: driverSeries, range: r, height: 240, xAxis: false })
+  drawChart(document.getElementById('chart-solar'), {
+    series: [{ points: clip(S.solar_power.points, r), color: cSolar, label: 'Solar', unit: ' kW', wash: true }],
+    range: r, height: 110, includeZero: true,
+  })
+
+  const delta = deltaSeries(r)
+  drawChart(document.getElementById('chart-delta'), {
+    series: [{ points: delta, color: cssVar('--c-delta-warm'), label: 'Attic − outdoor', unit: '°F', wash: true }],
+    range: r, height: 170, zeroLine: true,
+  })
+
+  // room panels on a shared y-domain
+  const panelKeys = [...roomKeys, ...refKeys]
+  let lo = Infinity, hi = -Infinity
+  const context = [
+    { points: clip(S.outdoor.points, r), color: cCtx, label: 'Outdoor', width: 1.5, opacity: 0.7 },
+    { points: clip(S.attic.points, r), color: cCtx, label: 'Attic', width: 1.5, opacity: 0.35 },
+  ]
+  for (const key of panelKeys) for (const p of clip(S[key].points, r)) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]) }
+  for (const s of context) for (const p of s.points) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]) }
+
+  legend(document.getElementById('legend-rooms'), [
+    { color: cRoom, label: 'Room' }, { color: cCtx, label: 'Outdoor (context)' },
+    { color: 'color-mix(in srgb, ' + cCtx + ' 35%, transparent)', label: 'Attic (context)' },
+    { color: cssVar('--ac-band'), label: 'AC running', band: true },
+  ])
+  const panels = document.getElementById('panels')
+  panels.textContent = ''
+  for (const key of panelKeys) {
+    const spec = S[key]
+    const panel = document.createElement('div')
+    panel.className = 'panel'
+    const h3 = document.createElement('h3')
+    const last = spec.points[spec.points.length - 1]
+    h3.textContent = spec.label + (spec.group === 'reference' ? ' (no attic)' : '')
+    const nowSpan = document.createElement('span')
+    nowSpan.className = 'now'
+    nowSpan.textContent = last ? `  ${last[1].toFixed(1)}°F` : ''
+    h3.appendChild(nowSpan)
+    panel.appendChild(h3)
+    const wrap = document.createElement('div')
+    wrap.className = 'chart-wrap'
+    panel.appendChild(wrap)
+    panels.appendChild(panel)
+    drawChart(wrap, {
+      series: [...context.map(s => ({ ...s, skipTooltip: false })), { points: clip(spec.points, r), color: cRoom, label: spec.label }],
+      range: r, height: 150, width: 380, yDomain: [lo, hi],
+      bands: spec.ac ? acBands(spec.ac, r) : [],
+      xAxis: false,
+    })
+  }
+
+  renderTable(document.getElementById('table-driver'),
+    [{ label: 'Outdoor', points: S.outdoor.points }, { label: 'Attic', points: S.attic.points },
+     { label: 'Console', points: S.ecowitt_console.points }, { label: 'Solar kW', points: S.solar_power.points }], r)
+  renderTable(document.getElementById('table-delta'), [{ label: 'Attic − outdoor °F', points: delta }], r)
+  renderTable(document.getElementById('table-rooms'), panelKeys.map(k => ({ label: S[k].label, points: S[k].points })), r)
+}
+
+// ---- filters + toggles ----------------------------------------------------------
+const filterBar = document.getElementById('filters')
+for (const preset of PRESETS) {
+  const btn = document.createElement('button')
+  btn.textContent = preset.label
+  btn.className = preset.id === range.id ? 'active' : ''
+  btn.addEventListener('click', () => {
+    range = { start: Math.max(preset.start(), DATA.range.start), end: now, id: preset.id }
+    for (const b of filterBar.children) b.classList.remove('active')
+    btn.classList.add('active')
+    render()
+  })
+  filterBar.appendChild(btn)
+}
+
+for (const btn of document.querySelectorAll('.table-toggle')) {
+  btn.addEventListener('click', () => {
+    const target = document.getElementById('table-' + btn.dataset.table)
+    target.style.display = target.style.display === 'block' ? 'none' : 'block'
+  })
+}
+
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render)
+render()
+</script>
+</body>
+</html>

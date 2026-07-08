@@ -85,7 +85,8 @@
     background: none; border: none; cursor: pointer; text-decoration: underline;
   }
   .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; font-size: 12.5px; color: var(--text-secondary) }
-  .legend .key { display: inline-flex; align-items: center; gap: 6px }
+  .legend .key { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap }
+  .legend svg { flex: none; display: block }
   .legend .swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block }
   .legend .swatch.band { width: 14px; height: 10px; border-radius: 2px }
   .chart-wrap { position: relative }
@@ -321,11 +322,13 @@ function drawChart (mount, opts) {
         fill: s.color, opacity: 0.10,
       }, svg)
     }
-    el('polyline', {
+    const lineAttrs = {
       points: pts, fill: 'none', stroke: s.color,
       'stroke-width': s.width || 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
       opacity: s.opacity || 1,
-    }, svg)
+    }
+    if (s.dash) lineAttrs['stroke-dasharray'] = s.dash
+    el('polyline', lineAttrs, svg)
   }
 
   attachHover(mount, svg, opts, { x, y, M, pw, ph, r })
@@ -391,9 +394,17 @@ function legend (mount, items) {
   for (const item of items) {
     const key = document.createElement('span')
     key.className = 'key'
-    const swatch = document.createElement('span')
-    swatch.className = 'swatch' + (item.band ? ' band' : '')
-    swatch.style.background = item.color
+    let swatch
+    if (item.band) {
+      swatch = document.createElement('span')
+      swatch.className = 'swatch band'
+      swatch.style.background = item.color
+    } else {
+      // mini line sample so dash patterns carry identity alongside color
+      swatch = el('svg', { width: 24, height: 10 })
+      const line = el('line', { x1: 1, y1: 5, x2: 23, y2: 5, stroke: item.color, 'stroke-width': 3, 'stroke-linecap': 'round' }, swatch)
+      if (item.dash) line.setAttribute('stroke-dasharray', item.dash)
+    }
     const label = document.createElement('span')
     label.textContent = item.label
     key.append(swatch, label)
@@ -629,14 +640,15 @@ function renderModel (r) {
 
   const cOut = cssVar('--c-outdoor'), cAttic = cssVar('--c-attic'), cModel = cssVar('--c-model')
   legend(document.getElementById('legend-model'), [
-    { color: cOut, label: 'Outdoor (measured)' }, { color: cAttic, label: 'Attic (measured)' },
-    { color: cModel, label: 'Attic with radiant barrier (modeled, 15–35% band)' },
+    { color: cOut, label: 'Outdoor (measured, dotted)', dash: '2 5' },
+    { color: cAttic, label: 'Attic (measured, solid)' },
+    { color: cModel, label: 'Attic with radiant barrier (modeled, dashed, 15–35% band)', dash: '8 5' },
   ])
   drawChart(mount, {
     series: [
-      { points: clip(S.outdoor.points, dr), color: cOut, label: 'Outdoor' },
+      { points: clip(S.outdoor.points, dr), color: cOut, label: 'Outdoor', dash: '2 5' },
       { points: measured, color: cAttic, label: 'Attic measured' },
-      { points: central, color: cModel, label: 'Attic w/ barrier (est.)' },
+      { points: central, color: cModel, label: 'Attic w/ barrier (est.)', dash: '8 5', width: 2.5 },
     ],
     ribbons: [{ upper: lowCut, lower: highCut, color: cModel }],
     range: dr, height: 240,
@@ -689,11 +701,11 @@ function render () {
   const cRoom = cssVar('--c-room'), cCtx = cssVar('--c-context')
 
   const driverSeries = [
-    { points: clip(S.outdoor.points, r), color: cOut, label: 'Outdoor' },
+    { points: clip(S.outdoor.points, r), color: cOut, label: 'Outdoor', dash: '2 5' },
     { points: clip(S.attic.points, r), color: cAttic, label: 'Attic' },
   ]
   legend(document.getElementById('legend-driver'), [
-    { color: cOut, label: 'Outdoor' }, { color: cAttic, label: 'Attic' },
+    { color: cOut, label: 'Outdoor (dotted)', dash: '2 5' }, { color: cAttic, label: 'Attic (solid)' },
     { color: cSolar, label: 'Solar production (lower chart)' },
   ])
   drawChart(document.getElementById('chart-driver'), { series: driverSeries, range: r, height: 240, xAxis: false })
@@ -714,15 +726,16 @@ function render () {
   const panelKeys = [...roomKeys, ...refKeys]
   let lo = Infinity, hi = -Infinity
   const context = [
-    { points: clip(S.outdoor.points, r), color: cCtx, label: 'Outdoor', width: 1.5, opacity: 0.7 },
-    { points: clip(S.attic.points, r), color: cCtx, label: 'Attic', width: 1.5, opacity: 0.35 },
+    { points: clip(S.outdoor.points, r), color: cCtx, label: 'Outdoor', width: 1.5, opacity: 0.7, dash: '2 5' },
+    { points: clip(S.attic.points, r), color: cCtx, label: 'Attic', width: 1.5, opacity: 0.5, dash: '8 5' },
   ]
   for (const key of panelKeys) for (const p of clip(S[key].points, r)) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]) }
   for (const s of context) for (const p of s.points) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]) }
 
   legend(document.getElementById('legend-rooms'), [
-    { color: cRoom, label: 'Room' }, { color: cCtx, label: 'Outdoor (context)' },
-    { color: 'color-mix(in srgb, ' + cCtx + ' 35%, transparent)', label: 'Attic (context)' },
+    { color: cRoom, label: 'Room (thick solid)' },
+    { color: cCtx, label: 'Outdoor (dotted)', dash: '2 5' },
+    { color: cCtx, label: 'Attic (dashed)', dash: '8 5' },
     { color: cssVar('--ac-band'), label: 'AC running', band: true },
   ])
   const panels = document.getElementById('panels')
@@ -744,7 +757,7 @@ function render () {
     panel.appendChild(wrap)
     panels.appendChild(panel)
     drawChart(wrap, {
-      series: [...context.map(s => ({ ...s, skipTooltip: false })), { points: clip(spec.points, r), color: cRoom, label: spec.label }],
+      series: [...context.map(s => ({ ...s, skipTooltip: false })), { points: clip(spec.points, r), color: cRoom, label: spec.label, width: 2.5 }],
       range: r, height: 150, width: 380, yDomain: [lo, hi],
       bands: spec.ac ? acBands(spec.ac, r) : [],
       xAxis: false,

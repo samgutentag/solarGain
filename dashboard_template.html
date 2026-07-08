@@ -20,6 +20,7 @@
     --c-room: #1baf7a;
     --c-model: #4a3aa7;
     --c-wind: #e87ba4;
+    --c-vent: #008300;
     --c-delta-warm: #e34948;
     --c-delta-cool: #2a78d6;
     --c-context: #898781;
@@ -41,6 +42,7 @@
       --c-room: #199e70;
       --c-model: #9085e9;
       --c-wind: #d55181;
+      --c-vent: #008300;
       --c-delta-warm: #e66767;
       --c-delta-cool: #3987e5;
       --ac-band: rgba(57, 135, 229, 0.14);
@@ -169,6 +171,20 @@
   <div class="chart-wrap" id="chart-model"></div>
   <div class="sub" id="model-stats"></div>
   <div class="dtable" id="table-model"></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>What a ridge vent might do</h2>
+      <div class="sub">Same fitted model, different physics: venting raises the attic's heat-loss conductance, which divides both the solar gain and the flush time. Central estimate doubles the conductance (band: +50% to +150%) — a full ridge + opened-soffit retrofit, not a ridge vent alone; the wind analysis below suggests intake is currently the bottleneck. Hottest day in range.</div>
+    </div>
+    <button class="table-toggle" data-table="vent">table</button>
+  </div>
+  <div class="legend" id="legend-vent"></div>
+  <div class="chart-wrap" id="chart-vent"></div>
+  <div class="sub" id="vent-stats"></div>
+  <div class="dtable" id="table-vent"></div>
 </div>
 
 <div class="card">
@@ -619,26 +635,42 @@ function fitAtticModel () {
     const r2 = (sxy * sxy) / (sxx * syy)
     if (!best || r2 > best.r2) best = { tau, a: ym - b * xm, b, r2, ema, n }
   }
+  if (best) best.grid = grid
   return best
 }
 const MODEL = fitAtticModel()
 
-function renderModel (r) {
-  const mount = document.getElementById('chart-model')
-  const statsEl = document.getElementById('model-stats')
-  if (!MODEL) { statsEl.textContent = 'Not enough overlapping data to fit the model yet.'; return }
+function emaFor (tau) {
+  const alpha = BUCKET / tau
+  const ema = new Map()
+  let s = 0
+  for (const [t, v] of MODEL.grid) { s = alpha * v + (1 - alpha) * s; ema.set(t, s) }
+  return ema
+}
 
-  // hottest attic day in the current range
+function hottestDayRange (r) {
   const byDay = {}
   for (const p of clip(S.attic.points, r)) {
     const d = localDay(p[0])
     if (!byDay[d] || p[1] > byDay[d][1]) byDay[d] = p
   }
   const hottest = Object.values(byDay).sort((p, q) => q[1] - p[1])[0]
-  if (!hottest) { statsEl.textContent = 'No attic data in range.'; return }
+  if (!hottest) return null
   const peakDate = new Date(hottest[0] * 1000)
   const midnight = new Date(peakDate.toLocaleDateString('en-US', { timeZone: TZ }) + ' 00:00:00')
-  const dr = { start: Math.max(Math.floor(midnight.getTime() / 1000), DATA.range.start), end: Math.min(Math.floor(midnight.getTime() / 1000) + 86400, DATA.range.end) }
+  return {
+    start: Math.max(Math.floor(midnight.getTime() / 1000), DATA.range.start),
+    end: Math.min(Math.floor(midnight.getTime() / 1000) + 86400, DATA.range.end),
+  }
+}
+
+function renderModel (r) {
+  const mount = document.getElementById('chart-model')
+  const statsEl = document.getElementById('model-stats')
+  if (!MODEL) { statsEl.textContent = 'Not enough overlapping data to fit the model yet.'; return }
+
+  const dr = hottestDayRange(r)
+  if (!dr) { statsEl.textContent = 'No attic data in range.'; return }
 
   const out = new Map(S.outdoor.points)
   const scenario = frac => {
@@ -687,6 +719,60 @@ function renderModel (r) {
   renderTable(document.getElementById('table-model'),
     [{ label: 'Outdoor', points: clip(S.outdoor.points, dr) }, { label: 'Attic measured', points: measured },
      { label: 'Fitted (no barrier)', points: fitted }, { label: 'With barrier (est.)', points: central }], dr)
+}
+
+// ---- ridge vent scenario -----------------------------------------------------------
+function renderVent (r) {
+  const statsEl = document.getElementById('vent-stats')
+  if (!MODEL) { statsEl.textContent = 'Not enough overlapping data to fit the model yet.'; return }
+  const dr = hottestDayRange(r)
+  if (!dr) { statsEl.textContent = 'No attic data in range.'; return }
+
+  const out = new Map(S.outdoor.points)
+  // venting multiplies loss conductance by (1+k): gain, offset, and time constant all divide by (1+k)
+  const scenario = k => {
+    const ema = k === 0 ? MODEL.ema : emaFor(MODEL.tau / (1 + k))
+    const pts = []
+    for (const [t] of clip(S.attic.points, dr)) {
+      if (out.has(t) && ema.has(t)) {
+        pts.push([t, Math.round((out.get(t) + (MODEL.a + MODEL.b * ema.get(t)) / (1 + k)) * 10) / 10])
+      }
+    }
+    return pts
+  }
+  const fitted = scenario(0), central = scenario(1.0), low = scenario(0.5), high = scenario(1.5)
+  const measured = clip(S.attic.points, dr).filter(p => out.has(p[0]))
+
+  const cOut = cssVar('--c-outdoor'), cAttic = cssVar('--c-attic'), cVent = cssVar('--c-vent')
+  legend(document.getElementById('legend-vent'), [
+    { color: cOut, label: 'Outdoor (measured, dotted)', dash: '2 5' },
+    { color: cAttic, label: 'Attic (measured, solid)' },
+    { color: cVent, label: 'Attic with ridge + soffit venting (modeled, dashed, band)', dash: '8 5' },
+  ])
+  drawChart(document.getElementById('chart-vent'), {
+    series: [
+      { points: clip(S.outdoor.points, dr), color: cOut, label: 'Outdoor', dash: '2 5' },
+      { points: measured, color: cAttic, label: 'Attic measured' },
+      { points: central, color: cVent, label: 'Attic w/ venting (est.)', dash: '8 5', width: 2.5 },
+    ],
+    ribbons: [{ upper: low, lower: high, color: cVent }],
+    range: dr, height: 240,
+  })
+
+  const peakOf = pts => pts.length ? Math.max(...pts.map(p => p[1])) : null
+  const evening = pts => { const p = pts.filter(q => { const h = parseInt(new Date(q[0] * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: TZ }), 10); return h === 21 }); return p.length ? p.reduce((u, v) => u + v[1], 0) / p.length : null }
+  const fPeak = peakOf(fitted), cPeak = peakOf(central)
+  const fEve = evening(fitted), cEve = evening(central), loEve = evening(low), hiEve = evening(high)
+  const fmt1 = v => v == null ? '—' : v.toFixed(1)
+  statsEl.textContent =
+    `${fmtDay(dr.start)}: modeled peak cut ${fmt1(fPeak - cPeak)}°F (range ${fmt1(fPeak - peakOf(low))}–${fmt1(fPeak - peakOf(high))}°F), ` +
+    `taking the modeled peak ${fmt1(fPeak)} -> ${fmt1(cPeak)}°F. The bigger win is the tail: at 9 PM ${fmt1(fEve)} -> ${fmt1(cEve)}°F ` +
+    `(range ${fmt1(loEve)}–${fmt1(hiEve)}°F), because the flush time constant drops from ~${Math.round(MODEL.tau / 60)} to ~${Math.round(MODEL.tau / 2 / 60)} min. ` +
+    'Assumes balanced intake + exhaust actually gets installed; a ridge vent with starved soffits will land near the weak end or below it.'
+
+  renderTable(document.getElementById('table-vent'),
+    [{ label: 'Outdoor', points: clip(S.outdoor.points, dr) }, { label: 'Attic measured', points: measured },
+     { label: 'Fitted (as-is)', points: fitted }, { label: 'With venting (est.)', points: central }], dr)
 }
 
 // ---- wind vs attic residuals -----------------------------------------------------
@@ -863,6 +949,7 @@ function render () {
   })
 
   renderModel(r)
+  renderVent(r)
   renderWind()
 
   // room panels on a shared y-domain

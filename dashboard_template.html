@@ -18,6 +18,7 @@
     --c-attic: #eb6834;
     --c-solar: #eda100;
     --c-room: #1baf7a;
+    --c-model: #4a3aa7;
     --c-delta-warm: #e34948;
     --c-delta-cool: #2a78d6;
     --c-context: #898781;
@@ -37,6 +38,7 @@
       --c-attic: #d95926;
       --c-solar: #c98500;
       --c-room: #199e70;
+      --c-model: #9085e9;
       --c-delta-warm: #e66767;
       --c-delta-cool: #3987e5;
       --ac-band: rgba(57, 135, 229, 0.14);
@@ -150,6 +152,20 @@
   </div>
   <div class="chart-wrap" id="chart-delta"></div>
   <div class="dtable" id="table-delta"></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>What a radiant barrier might do</h2>
+      <div class="sub" id="model-sub">Model fitted to this data: attic ≈ outdoor + a + b·solar (exponentially smoothed). A radiant barrier removes an assumed 25% (band: 15–35%) of the solar-driven excess. Shown on the hottest day in range.</div>
+    </div>
+    <button class="table-toggle" data-table="model">table</button>
+  </div>
+  <div class="legend" id="legend-model"></div>
+  <div class="chart-wrap" id="chart-model"></div>
+  <div class="sub" id="model-stats"></div>
+  <div class="dtable" id="table-model"></div>
 </div>
 
 <div class="card">
@@ -270,6 +286,13 @@ function drawChart (mount, opts) {
     const x0 = Math.max(x(band[0]), M.left)
     const x1 = Math.min(x(band[1]), M.left + pw)
     if (x1 > x0) el('rect', { x: x0, y: M.top, width: x1 - x0, height: ph, fill: cssVar('--ac-band') }, svg)
+  }
+
+  for (const ribbon of opts.ribbons || []) {
+    if (!ribbon.upper.length) continue
+    const upper = ribbon.upper.map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`)
+    const lower = [...ribbon.lower].reverse().map(p => `${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`)
+    el('polygon', { points: upper.concat(lower).join(' '), fill: ribbon.color, opacity: 0.10 }, svg)
   }
 
   const yTicks = niceTicks(lo, hi, 5)
@@ -534,6 +557,110 @@ function renderInsights (stats, r) {
   }
 }
 
+// ---- radiant barrier model -----------------------------------------------------
+// First-order thermal fit over the FULL dataset: delta = a + b * ema(solar, tau).
+// tau (roof-deck time constant) is grid-searched; a radiant barrier scales b by (1-r).
+const BUCKET = 600
+function fitAtticModel () {
+  const out = new Map(S.outdoor.points)
+  const atticMap = new Map(S.attic.points)
+  const solarMap = new Map(S.solar_power.points)
+  const t0 = Math.ceil(DATA.range.start / BUCKET) * BUCKET
+  const grid = []
+  let lastSolar = 0
+  for (let t = t0; t <= DATA.range.end; t += BUCKET) {
+    if (solarMap.has(t)) lastSolar = solarMap.get(t)
+    grid.push([t, lastSolar])
+  }
+  let best = null
+  for (let tau = 1800; tau <= 28800; tau += 1800) {
+    const alpha = BUCKET / tau
+    const ema = new Map()
+    let s = 0
+    for (const [t, v] of grid) { s = alpha * v + (1 - alpha) * s; ema.set(t, s) }
+    const xs = [], ys = []
+    for (const [t, atticV] of atticMap) {
+      if (out.has(t) && ema.has(t)) { xs.push(ema.get(t)); ys.push(atticV - out.get(t)) }
+    }
+    if (xs.length < 50) continue
+    const n = xs.length
+    const xm = xs.reduce((u, v) => u + v, 0) / n, ym = ys.reduce((u, v) => u + v, 0) / n
+    let sxy = 0, sxx = 0, syy = 0
+    for (let i = 0; i < n; i++) { sxy += (xs[i] - xm) * (ys[i] - ym); sxx += (xs[i] - xm) ** 2; syy += (ys[i] - ym) ** 2 }
+    if (!sxx || !syy) continue
+    const b = sxy / sxx
+    const r2 = (sxy * sxy) / (sxx * syy)
+    if (!best || r2 > best.r2) best = { tau, a: ym - b * xm, b, r2, ema, n }
+  }
+  return best
+}
+const MODEL = fitAtticModel()
+
+function renderModel (r) {
+  const mount = document.getElementById('chart-model')
+  const statsEl = document.getElementById('model-stats')
+  if (!MODEL) { statsEl.textContent = 'Not enough overlapping data to fit the model yet.'; return }
+
+  // hottest attic day in the current range
+  const byDay = {}
+  for (const p of clip(S.attic.points, r)) {
+    const d = localDay(p[0])
+    if (!byDay[d] || p[1] > byDay[d][1]) byDay[d] = p
+  }
+  const hottest = Object.values(byDay).sort((p, q) => q[1] - p[1])[0]
+  if (!hottest) { statsEl.textContent = 'No attic data in range.'; return }
+  const peakDate = new Date(hottest[0] * 1000)
+  const midnight = new Date(peakDate.toLocaleDateString('en-US', { timeZone: TZ }) + ' 00:00:00')
+  const dr = { start: Math.max(Math.floor(midnight.getTime() / 1000), DATA.range.start), end: Math.min(Math.floor(midnight.getTime() / 1000) + 86400, DATA.range.end) }
+
+  const out = new Map(S.outdoor.points)
+  const scenario = frac => {
+    const pts = []
+    for (const [t] of clip(S.attic.points, dr)) {
+      if (out.has(t) && MODEL.ema.has(t)) {
+        pts.push([t, Math.round((out.get(t) + MODEL.a + MODEL.b * (1 - frac) * MODEL.ema.get(t)) * 10) / 10])
+      }
+    }
+    return pts
+  }
+  const central = scenario(0.25), lowCut = scenario(0.15), highCut = scenario(0.35)
+  const measured = clip(S.attic.points, dr).filter(p => out.has(p[0]))
+  const fitted = scenario(0)
+
+  const cOut = cssVar('--c-outdoor'), cAttic = cssVar('--c-attic'), cModel = cssVar('--c-model')
+  legend(document.getElementById('legend-model'), [
+    { color: cOut, label: 'Outdoor (measured)' }, { color: cAttic, label: 'Attic (measured)' },
+    { color: cModel, label: 'Attic with radiant barrier (modeled, 15–35% band)' },
+  ])
+  drawChart(mount, {
+    series: [
+      { points: clip(S.outdoor.points, dr), color: cOut, label: 'Outdoor' },
+      { points: measured, color: cAttic, label: 'Attic measured' },
+      { points: central, color: cModel, label: 'Attic w/ barrier (est.)' },
+    ],
+    ribbons: [{ upper: lowCut, lower: highCut, color: cModel }],
+    range: dr, height: 240,
+  })
+
+  const peakOf = pts => pts.length ? Math.max(...pts.map(p => p[1])) : null
+  const mPeak = peakOf(measured), fPeak = peakOf(fitted), cPeak = peakOf(central)
+  const cutLo = peakOf(fitted) - peakOf(lowCut), cutHi = peakOf(fitted) - peakOf(highCut)
+  const evening = pts => { const p = pts.filter(q => { const h = parseInt(new Date(q[0] * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: TZ }), 10); return h === 21 }); return p.length ? p.reduce((u, v) => u + v[1], 0) / p.length : null }
+  const fEve = evening(fitted), cEve = evening(central)
+  const fmt1 = v => v == null ? '—' : v.toFixed(1)
+  statsEl.textContent =
+    `${fmtDay(dr.start)} (measured attic peak ${fmt1(mPeak)}°F): the fitted model puts the barrier's peak cut at ` +
+    `${fmt1(fPeak - cPeak)}°F (range ${fmt1(cutLo)}–${fmt1(cutHi)}°F), taking the modeled peak ${fmt1(fPeak)} -> ${fmt1(cPeak)}°F. ` +
+    `At 9 PM: ${fmt1(fEve)} -> ${fmt1(cEve)}°F. ` +
+    `Fit quality: R²=${MODEL.r2.toFixed(2)} over ${MODEL.n} samples, deck time constant ~${Math.round(MODEL.tau / 60)} min ` +
+    `(model attic = outdoor + ${MODEL.a.toFixed(1)} + ${MODEL.b.toFixed(2)}·solar-ema °F). ` +
+    'Assumes the barrier removes 25% (15–35%) of the solar-driven excess — attic AIR temp only; ceiling heat-flux relief is larger with thin insulation.'
+
+  renderTable(document.getElementById('table-model'),
+    [{ label: 'Outdoor', points: clip(S.outdoor.points, dr) }, { label: 'Attic measured', points: measured },
+     { label: 'Fitted (no barrier)', points: fitted }, { label: 'With barrier (est.)', points: central }], dr)
+}
+
 // ---- tables -------------------------------------------------------------------
 function renderTable (mount, cols, r) {
   mount.textContent = ''
@@ -580,6 +707,8 @@ function render () {
     series: [{ points: delta, color: cssVar('--c-delta-warm'), label: 'Attic − outdoor', unit: '°F', wash: true }],
     range: r, height: 170, zeroLine: true,
   })
+
+  renderModel(r)
 
   // room panels on a shared y-domain
   const panelKeys = [...roomKeys, ...refKeys]

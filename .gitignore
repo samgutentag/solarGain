@@ -3,3 +3,7 @@ data/
 dashboard.html
 __pycache__/
 .shots/
+entities.py
+experiment-checklist.html
+experiment-log.md
+venting-survey.md

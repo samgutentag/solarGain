@@ -133,7 +133,7 @@
 <header>
   <h1>Solar Gain — House Thermal Study</h1>
   <p>Outdoor air vs attic vs rooms, with roof solar production as the irradiance proxy.
-     Office excluded (separate attic). Generated __GENERATED_AT__.</p>
+     Generated __GENERATED_AT__.</p>
 </header>
 
 <div class="filters" id="filters"></div>
@@ -197,7 +197,7 @@
   <div class="card-head">
     <div>
       <h2>What R-38 attic insulation might do</h2>
-      <div class="sub">The unconditioned hallway bathroom is the test instrument: its temperature is fitted against outdoor air and the attic delta, then replayed with the ceiling coupling cut to R-38 (from an assumed R-12 today, band R-10 to R-15). The same fitted attic-coupling share scales the measured bedroom AC energy. Simplification: insulation also slows heat arrival, which this ignores — real relief is slightly better than shown. Hottest day in range.</div>
+      <div class="sub">An unconditioned room acts as the test instrument (the best-fitting room without an AC): its temperature is fitted against outdoor air and the attic delta, then replayed with the ceiling coupling cut to R-38 (from an assumed R-12 today, band R-10 to R-15). The same fitted attic-coupling share scales the measured AC energy. Simplification: insulation also slows heat arrival, which this ignores — real relief is slightly better than shown. Hottest day in range.</div>
     </div>
     <button class="table-toggle" data-table="insul">table</button>
   </div>
@@ -521,7 +521,7 @@ function computeStats (r) {
   const medianLag = lags.length ? lags[Math.floor(lags.length / 2)] : null
 
   let acSeconds = 0
-  for (const key of ['bedroom_ac', 'living_room_ac', 'north_bedroom_ac', 'south_bedroom_ac']) {
+  for (const key in DATA.climate) {
     for (const seg of acBands(key, r)) acSeconds += Math.min(seg[1], r.end) - Math.max(seg[0], r.start)
   }
 
@@ -584,11 +584,11 @@ function renderKpis (stats) {
     { label: 'Outdoor peak', value: stats.outdoorPeak ? stats.outdoorPeak[1].toFixed(1) + '°F' : '—', sub: stats.outdoorPeak ? fmtStamp(stats.outdoorPeak[0]) : '' },
     { label: 'Max attic − outdoor', value: stats.deltaPeak ? '+' + stats.deltaPeak[1].toFixed(1) + '°F' : '—', sub: stats.deltaPeak ? fmtStamp(stats.deltaPeak[0]) : '' },
     { label: 'Attic lag after solar peak', value: stats.medianLag ? fmtDur(stats.medianLag) : '—', sub: stats.lagsCount ? `median of ${stats.lagsCount} day(s)` : 'needs a sunny day in range' },
-    { label: 'AC energy (3 metered units)', value: stats.acKwh ? stats.acKwh.toFixed(1) + ' kWh' : '—', sub: stats.acKwh ? Math.round(stats.acKwhSolar / stats.acKwh * 100) + '% while solar producing' : 'needs Emporia outlet data' },
+    { label: 'AC energy (metered units)', value: stats.acKwh ? stats.acKwh.toFixed(1) + ' kWh' : '—', sub: stats.acKwh ? Math.round(stats.acKwhSolar / stats.acKwh * 100) + '% while solar producing' : 'needs Emporia outlet data' },
   ]
-  for (const key of ['bedroom_ac', 'north_bedroom_ac', 'south_bedroom_ac', 'living_room_ac']) {
+  for (const key of Object.keys(stats.units)) {
     const u = stats.units[key]
-    if (!u) continue
+    if (!u.seconds && u.kwh == null) continue
     tiles.push({
       label: u.label,
       value: u.kwh != null ? u.kwh.toFixed(1) + ' kWh' : fmtDur(u.seconds),
@@ -627,19 +627,21 @@ function renderInsights (stats, r) {
     const label = new Date(2000, 0, 1, hh, mm).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
     add(`Evenings, outdoor air drops below the average room temperature around <span class="num">${esc(label)}</span> — after that, moving outside air in beats running compressors.`)
   }
-  // AC effect: bedroom vs the unconditioned hallway bathroom while the bedroom AC runs
-  const bands = acBands('bedroom_ac', r)
-  if (bands.length && S.bedroom && S.hallway_bathroom) {
-    const ref = new Map(clip(S.hallway_bathroom.points, r).map(p => [p[0], p[1]]))
+  // AC effect: a conditioned room vs a free-running unconditioned room while its AC runs
+  const acRoomKey = roomKeys.find(k => S[k].ac)
+  const freeKey = roomKeys.find(k => !S[k].ac)
+  const bands = acRoomKey ? acBands(S[acRoomKey].ac, r) : []
+  if (bands.length && freeKey) {
+    const ref = new Map(clip(S[freeKey].points, r).map(p => [p[0], p[1]]))
     let sum = 0, n = 0
-    for (const p of clip(S.bedroom.points, r)) {
+    for (const p of clip(S[acRoomKey].points, r)) {
       if (ref.has(p[0]) && bands.some(b => p[0] >= b[0] && p[0] <= b[1])) { sum += ref.get(p[0]) - p[1]; n++ }
     }
-    if (n > 5) add(`While the bedroom AC runs, the bedroom sits <span class="num">${(sum / n).toFixed(1)}°F</span> cooler than the unconditioned hallway bathroom — that gap is what the compressor is buying.`)
+    if (n > 5) add(`While the ${esc(S[acRoomKey].label.toLowerCase())} AC runs, that room sits <span class="num">${(sum / n).toFixed(1)}°F</span> cooler than the unconditioned ${esc(S[freeKey].label.toLowerCase())} — that gap is what the compressor is buying.`)
   }
   if (stats.acKwh > 0.5) {
     const pct = Math.round(stats.acKwhSolar / stats.acKwh * 100)
-    add(`The bedroom ACs drew <span class="num">${stats.acKwh.toFixed(1)} kWh</span> in this range, and only ` +
+    add(`The metered ACs drew <span class="num">${stats.acKwh.toFixed(1)} kWh</span> in this range, and only ` +
         `<span class="num">${pct}%</span> of it while the panels were producing — the rest came off the battery or the grid, fighting heat the attic banked earlier.`)
   }
 }
@@ -870,11 +872,23 @@ function fitRoomModel (roomKey) {
   return best
 }
 
+function instrumentRoom () {
+  // the test instrument is the unconditioned room the model explains best
+  let best = null
+  for (const key of roomKeys) {
+    if (S[key].ac) continue
+    const fit = fitRoomModel(key)
+    if (fit && fit.c > 0 && (!best || fit.r2 > best.fit.r2)) best = { key, fit }
+  }
+  return best
+}
+
 function renderInsulation (r) {
   const statsEl = document.getElementById('insul-stats')
-  const roomKey = 'hallway_bathroom'
-  const fit = renderInsulation.fit = renderInsulation.fit || fitRoomModel(roomKey)
-  if (!fit || fit.c <= 0) { statsEl.textContent = 'Could not fit a positive attic coupling for the hallway bathroom yet.'; return }
+  const best = renderInsulation.best = renderInsulation.best || instrumentRoom()
+  if (!best) { statsEl.textContent = 'Could not fit a positive attic coupling for any unconditioned room yet (the card needs at least one room without an AC).'; return }
+  const { key: roomKey, fit } = best
+  const roomLabel = S[roomKey].label
   const dr = hottestDayRange(r)
   if (!dr) { statsEl.textContent = 'No data in range.'; return }
 
@@ -895,8 +909,8 @@ function renderInsulation (r) {
   const cOut = cssVar('--c-outdoor'), cRoom = cssVar('--c-room'), cModel = cssVar('--c-model')
   legend(document.getElementById('legend-insul'), [
     { color: cOut, label: 'Outdoor (measured, dotted)', dash: '2 5' },
-    { color: cRoom, label: 'Hallway bathroom (measured, solid)' },
-    { color: cModel, label: 'Hallway bathroom at R-38 (modeled, dashed, band)', dash: '8 5' },
+    { color: cRoom, label: `${roomLabel} (measured, solid)` },
+    { color: cModel, label: `${roomLabel} at R-38 (modeled, dashed, band)`, dash: '8 5' },
   ])
   drawChart(document.getElementById('chart-insul'), {
     series: [
@@ -936,7 +950,7 @@ function renderInsulation (r) {
   statsEl.textContent =
     `Fit: R²=${fit.r2.toFixed(2)} over ${fit.n} samples, room time constant ~${Math.round(fit.tau / 3600)}h; ` +
     `attic coupling is ${(share * 100).toFixed(0)}% of the room's temperature drivers. ` +
-    `${fmtDay(dr.start)}: hallway bathroom peak ${fmt1(mPeak)} -> ${fmt1(cPeak)}°F at R-38, 9 PM ${fmt1(mEve)} -> ${fmt1(cEve)}°F. ` +
+    `${fmtDay(dr.start)}: ${roomLabel.toLowerCase()} peak ${fmt1(mPeak)} -> ${fmt1(cPeak)}°F at R-38, 9 PM ${fmt1(mEve)} -> ${fmt1(cEve)}°F. ` +
     `Ceiling heat flux drops ~${Math.round(cut(12) * 100)}% (band ${Math.round(cut(15) * 100)}–${Math.round(cut(10) * 100)}%), ` +
     `saving roughly ${savedLo.toFixed(1)}–${savedHi.toFixed(1)} kWh/day of AC (central ${savedMid.toFixed(1)}, from a measured ${acDaily.toFixed(1)} kWh/day across all metered units). ` +
     `With the assumptions above: you spend ~${usd(spendYr)}/yr running the ACs; ` +

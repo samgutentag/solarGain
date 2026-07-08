@@ -95,7 +95,7 @@
   <dt>Driver</dt>
   <dd>A series that pushes heat into the house rather than reporting a room: outdoor temperature, attic temperature, and solar production. The solar array doubles as a free irradiance sensor, because panel output tracks the sunshine actually hitting your roof.</dd>
   <dt>Reference zone</dt>
-  <dd>A space outside the attic envelope (here, a garage with no attic). It shows what the sun does to a room <em>without</em> a hot attic above it, which is the control group for everything else.</dd>
+  <dd>A space outside the attic envelope (a garage or porch, say). It shows what the sun does to a room <em>without</em> a hot attic above it, which is the control group for everything else.</dd>
   <dt>Run band</dt>
   <dd>A shaded vertical stripe on a room panel marking when that room's AC was actually running. For units on smart outlets this is derived from power draw, not from what the AC's app claims.</dd>
   <dt>Scenario card</dt>
@@ -106,6 +106,7 @@
 <p>You need Python 3.9 or newer (for <code>zoneinfo</code>; macOS and any recent Linux qualify) and a Home Assistant instance you can reach on your network. There is nothing to <code>pip install</code>. The whole pipeline is standard library.</p>
 <ol>
   <li>Clone the repo and <code>cd</code> into it.</li>
+  <li>Copy the sensor-map template: <code>cp entities.example.py entities.py</code> (editing it is section 4).</li>
   <li>In Home Assistant: Profile &rarr; Security &rarr; Long-lived access tokens &rarr; Create token.</li>
   <li>Copy the env template and paste the token in:
 <pre><code>cp .env.example .env
@@ -117,7 +118,9 @@ HASS_URL=http://homeassistant.local:8123</code></pre></li>
 <p>Want to see the dashboard before creating a token? <code>./run.sh --mock</code> builds it from synthetic data with the expected physics baked in (a diurnal outdoor sine, a solar bell curve, a lagged attic). It is how the charts were developed before real data existed.</p>
 
 <h2 id="yours">4. Pointing it at your house</h2>
-<p><code>entities.py</code> is the single source of truth for what gets fetched. It ships with one specific house in it, so this file is the part you edit. Three maps matter:</p>
+<p><code>entities.py</code> is the single source of truth for what gets fetched. It describes your house, so it lives outside git (like <code>.env</code>): copy the tracked template and edit the copy.</p>
+<pre><code>cp entities.example.py entities.py</code></pre>
+<p>Three maps matter:</p>
 <h3><code>TEMPERATURE_SENSORS</code></h3>
 <p>One entry per sensor. Each has a <code>match</code> (the friendly name to resolve), a <code>label</code> (what the chart shows), and a <code>group</code>: <code>driver</code> for outdoor and attic, <code>room</code> for living spaces, <code>reference</code> for no-attic control zones. A room entry may also carry an <code>ac</code> key naming the AC unit that serves it; that is what links run bands to room panels. Two rooms can share one unit (an open floor plan kitchen and living room, say).</p>
 <p>Minimum viable set: <code>outdoor</code>, <code>attic</code>, and at least one room. The scenario cards need outdoor, attic, and solar to fit anything.</p>
@@ -240,10 +243,10 @@ HASS_URL=http://homeassistant.local:8123</code></pre></li>
 
 <figure>
   <div class="diagram">
-  <svg viewBox="0 0 640 232" role="img" aria-label="Anatomy of a room panel: a thick solid green room line, a dotted grey outdoor line, a dashed grey attic line, a shaded band marking when the room's AC ran, and a header showing the room name with its latest reading.">
+  <svg viewBox="0 0 640 232" role="img" aria-label="Anatomy of a room panel for a bedroom: a thick solid green room line, a dotted grey outdoor line, a dashed grey attic line, a shaded band marking when the room's AC ran, and a header showing the room name with its latest reading.">
     <!-- panel frame -->
     <rect x="26" y="38" width="300" height="176" rx="8" fill="#fbfcfe" stroke="#c9d2dd" stroke-width="1.5"/>
-    <text x="40" y="60" class="svg-label" font-size="12" font-weight="700" fill="#1a1a1a">North Bedroom</text>
+    <text x="40" y="60" class="svg-label" font-size="12" font-weight="700" fill="#1a1a1a">Bedroom</text>
     <text x="149" y="60" class="svg-label" font-size="12" fill="#1baf7a" font-weight="700">71.4&#176;F</text>
     <!-- AC band -->
     <rect x="214" y="72" width="76" height="130" fill="#2a78d6" opacity="0.12"/>

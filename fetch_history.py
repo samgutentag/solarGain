@@ -23,7 +23,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from entities import CLIMATE_ENTITIES, POWER_AC_SENSORS, SOLAR_SENSORS, TEMPERATURE_SENSORS, WIND_SENSORS
+try:
+    from entities import CLIMATE_ENTITIES, POWER_AC_SENSORS, SOLAR_SENSORS, TEMPERATURE_SENSORS, WIND_SENSORS
+except ImportError:
+    raise SystemExit(
+        'No entities.py found. It describes YOUR house, so it lives outside git:\n'
+        '  cp entities.example.py entities.py\n'
+        'then edit the friendly names to match your Home Assistant sensors.'
+    )
 
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / 'data' / 'history.json'
@@ -282,21 +289,23 @@ def mock(days):
 
     timestamps = list(range(t0 - t0 % step, t1, step))
     series = {}
-    specs = {**TEMPERATURE_SENSORS}
-    generators = {
-        'outdoor': lambda ts: outdoor(ts),
-        'attic': lambda ts: attic(ts),
-        'bedroom': lambda ts: room(ts, 0.35, 0.5, 'bedroom_ac'),
-        'living_room': lambda ts: room(ts, 0.45, 1.5, 'living_room_ac'),
-        'kitchen': lambda ts: room(ts, 0.5, 2.0),
-        'north_bedroom': lambda ts: room(ts, 0.4, 0.0, 'north_bedroom_ac'),
-        'south_bedroom': lambda ts: room(ts, 0.42, 1.0, 'south_bedroom_ac'),
-        'bathroom': lambda ts: room(ts, 0.55, 3.0),
-        'hallway_bathroom': lambda ts: room(ts, 0.6, 4.5),
-        'garage': lambda ts: outdoor(ts - 3600) + 6,
-    }
-    for key, gen in generators.items():
-        spec = specs[key]
+    # generators are derived from whatever layout entities.py declares, so
+    # --mock works for any house: drivers get the canonical curves, rooms get
+    # progressively damped/offset variants, reference zones track outdoor
+    room_i = 0
+    for key, spec in TEMPERATURE_SENSORS.items():
+        if key == 'outdoor':
+            gen = outdoor
+        elif key == 'attic':
+            gen = attic
+        elif spec.get('group') == 'reference':
+            gen = lambda ts: outdoor(ts - 3600) + 6
+        else:
+            damp = 0.35 + (room_i % 6) * 0.05
+            offset = (room_i % 5) * 1.0
+            ac_key = spec.get('ac')
+            gen = lambda ts, d=damp, o=offset, a=ac_key: room(ts, d, o, a)
+            room_i += 1
         series[key] = {
             'label': spec['label'], 'group': spec['group'], 'unit': '°F',
             'ac': spec.get('ac'),
@@ -311,12 +320,15 @@ def mock(days):
         'points': [[ts, round(max(0.0, 3 + 4 * math.sin(2 * math.pi * (day_frac(ts) - 0.5)) + math.sin(ts / 733) * 1.5), 2)] for ts in timestamps],
     }
 
+    # every AC unit the layout references gets afternoon-to-evening run segments;
+    # units declared in POWER_AC_SENSORS also get a synthetic power trace
     climate, acpower = {}, {}
-    ac_units = (
-        ('bedroom_ac', 'Bedroom AC'), ('living_room_ac', 'Living Room AC'),
-        ('north_bedroom_ac', 'North Bedroom AC'), ('south_bedroom_ac', 'South Bedroom AC'),
-    )
-    for key, label in ac_units:
+    ac_labels = {k: s['label'] for k, s in {**CLIMATE_ENTITIES, **POWER_AC_SENSORS}.items()}
+    for key, spec in TEMPERATURE_SENSORS.items():
+        ac = spec.get('ac')
+        if ac and ac not in ac_labels:
+            ac_labels[ac] = spec['label'] + ' AC'
+    for key, label in ac_labels.items():
         segs = []
         day = datetime.fromtimestamp(t0, LOCAL_TZ).replace(hour=14, minute=0, second=0, microsecond=0)
         while day.timestamp() < t1:
@@ -324,11 +336,10 @@ def mock(days):
             segs.append([seg_start, seg_start + 8 * 3600, 'cool'])
             day += timedelta(days=1)
         climate[key] = {'label': label, 'segments': segs}
-        if key != 'living_room_ac':
+        if key in POWER_AC_SENSORS:
             acpower[key] = {'label': label, 'points': [
                 [ts, 520.0 if any(a <= ts <= b for a, b, _ in segs) else 0.0] for ts in timestamps
             ]}
-    climate['ecobee'] = {'label': 'Ecobee (central)', 'segments': []}
 
     return build_payload(start, end, series, climate, acpower)
 

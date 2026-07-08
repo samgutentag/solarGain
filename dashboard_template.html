@@ -116,6 +116,12 @@
   .dtable th, .dtable td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums }
   .dtable th:first-child, .dtable td:first-child { text-align: left }
   .dtable th { position: sticky; top: 0; background: var(--surface-1); color: var(--text-secondary); font-weight: 600 }
+  .assume { display: flex; gap: 16px; flex-wrap: wrap; margin: 10px 0 4px; font-size: 12.5px; color: var(--text-secondary) }
+  .assume label { display: inline-flex; align-items: center; gap: 6px }
+  .assume input {
+    font: inherit; width: 72px; color: var(--text-primary);
+    background: var(--page); border: 1px solid var(--border); border-radius: 6px; padding: 3px 6px;
+  }
   .insights ul { margin: 6px 0 0 18px; color: var(--text-primary) }
   .insights li { margin-top: 6px }
   .insights .num { font-weight: 650 }
@@ -185,6 +191,26 @@
   <div class="chart-wrap" id="chart-vent"></div>
   <div class="sub" id="vent-stats"></div>
   <div class="dtable" id="table-vent"></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>What R-38 attic insulation might do</h2>
+      <div class="sub">The unconditioned hallway bathroom is the test instrument: its temperature is fitted against outdoor air and the attic delta, then replayed with the ceiling coupling cut to R-38 (from an assumed R-12 today, band R-10 to R-15). The same fitted attic-coupling share scales the measured bedroom AC energy. Simplification: insulation also slows heat arrival, which this ignores — real relief is slightly better than shown. Hottest day in range.</div>
+    </div>
+    <button class="table-toggle" data-table="insul">table</button>
+  </div>
+  <div class="legend" id="legend-insul"></div>
+  <div class="chart-wrap" id="chart-insul"></div>
+  <div class="assume">
+    <label>Electric rate $/kWh <input id="econ-rate" type="number" step="0.01" value="0.30"></label>
+    <label>Cooling days/yr <input id="econ-days" type="number" step="5" value="120"></label>
+    <label>Attic area sq ft <input id="econ-sqft" type="number" step="50" value="1200"></label>
+    <label>Install $/sq ft <input id="econ-unit" type="number" step="0.25" value="1.75"></label>
+  </div>
+  <div class="sub" id="insul-stats"></div>
+  <div class="dtable" id="table-insul"></div>
 </div>
 
 <div class="card">
@@ -502,13 +528,23 @@ function computeStats (r) {
   // AC energy from the power-derived series, and how much of it overlapped solar production
   const solarByT = new Map(solar.map(p => [p[0], p[1]]))
   let acKwh = 0, acKwhSolar = 0
+  const units = {}
+  for (const key in DATA.climate) {
+    if (key === 'ecobee') continue
+    let seconds = 0
+    for (const seg of acBands(key, r)) seconds += Math.min(seg[1], r.end) - Math.max(seg[0], r.start)
+    units[key] = { label: DATA.climate[key].label, seconds, kwh: null }
+  }
   for (const key in DATA.acpower || {}) {
+    let kwh = 0
     for (const p of clip(DATA.acpower[key].points, r)) {
-      const kwh = p[1] / 1000 * (10 / 60)
-      acKwh += kwh
+      const inc = p[1] / 1000 * (10 / 60)
+      kwh += inc
+      acKwh += inc
       const sp = solarByT.get(p[0])
-      if (sp != null && sp > 0.5) acKwhSolar += kwh
+      if (sp != null && sp > 0.5) acKwhSolar += inc
     }
+    if (units[key]) units[key].kwh = kwh
   }
 
   // evening crossover: first time after 4pm when outdoor < mean room temp
@@ -532,7 +568,7 @@ function computeStats (r) {
     }
   }
 
-  return { atticPeak, outdoorPeak, deltaPeak, solarPeak, medianLag, acSeconds, acKwh, acKwhSolar, crossovers, lagsCount: lags.length }
+  return { atticPeak, outdoorPeak, deltaPeak, solarPeak, medianLag, acSeconds, acKwh, acKwhSolar, units, crossovers, lagsCount: lags.length }
 }
 
 function fmtDur (sec) {
@@ -548,9 +584,17 @@ function renderKpis (stats) {
     { label: 'Outdoor peak', value: stats.outdoorPeak ? stats.outdoorPeak[1].toFixed(1) + '°F' : '—', sub: stats.outdoorPeak ? fmtStamp(stats.outdoorPeak[0]) : '' },
     { label: 'Max attic − outdoor', value: stats.deltaPeak ? '+' + stats.deltaPeak[1].toFixed(1) + '°F' : '—', sub: stats.deltaPeak ? fmtStamp(stats.deltaPeak[0]) : '' },
     { label: 'Attic lag after solar peak', value: stats.medianLag ? fmtDur(stats.medianLag) : '—', sub: stats.lagsCount ? `median of ${stats.lagsCount} day(s)` : 'needs a sunny day in range' },
-    { label: 'Portable AC runtime', value: fmtDur(stats.acSeconds), sub: 'all four units, summed' },
-    { label: 'Bedroom AC energy', value: stats.acKwh ? stats.acKwh.toFixed(1) + ' kWh' : '—', sub: stats.acKwh ? Math.round(stats.acKwhSolar / stats.acKwh * 100) + '% while solar producing' : 'needs Emporia outlet data' },
+    { label: 'AC energy (3 metered units)', value: stats.acKwh ? stats.acKwh.toFixed(1) + ' kWh' : '—', sub: stats.acKwh ? Math.round(stats.acKwhSolar / stats.acKwh * 100) + '% while solar producing' : 'needs Emporia outlet data' },
   ]
+  for (const key of ['bedroom_ac', 'north_bedroom_ac', 'south_bedroom_ac', 'living_room_ac']) {
+    const u = stats.units[key]
+    if (!u) continue
+    tiles.push({
+      label: u.label,
+      value: u.kwh != null ? u.kwh.toFixed(1) + ' kWh' : fmtDur(u.seconds),
+      sub: u.kwh != null ? `ran ${fmtDur(u.seconds)}` : 'runtime only — no power sensor',
+    })
+  }
   for (const t of tiles) {
     const div = document.createElement('div')
     div.className = 'tile'
@@ -775,6 +819,133 @@ function renderVent (r) {
      { label: 'Fitted (as-is)', points: fitted }, { label: 'With venting (est.)', points: central }], dr)
 }
 
+// ---- R-38 insulation scenario -------------------------------------------------------
+// Fit an unconditioned room as: room = p + q*ema(outdoor) + c*ema(attic - outdoor).
+// c is the attic (ceiling) coupling; R-12 -> R-38 scales it by R_now/38.
+function fitRoomModel (roomKey) {
+  if (!MODEL || !S[roomKey]) return null
+  const out = new Map(S.outdoor.points)
+  const attic = new Map(S.attic.points)
+  const t0 = MODEL.grid[0][0]
+  const outDense = [], deltaDense = []
+  let lastOut = null, lastDelta = null
+  for (const [t] of MODEL.grid) {
+    if (out.has(t)) lastOut = out.get(t)
+    if (out.has(t) && attic.has(t)) lastDelta = attic.get(t) - out.get(t)
+    outDense.push([t, lastOut]); deltaDense.push([t, lastDelta])
+  }
+  let best = null
+  for (let tau = 3600; tau <= 28800; tau += 3600) {
+    const alpha = BUCKET / tau
+    const emaOut = new Map(), emaDelta = new Map()
+    let so = null, sd = null
+    for (let i = 0; i < outDense.length; i++) {
+      const [t, ov] = outDense[i]; const dv = deltaDense[i][1]
+      if (ov != null) so = so == null ? ov : alpha * ov + (1 - alpha) * so
+      if (dv != null) sd = sd == null ? dv : alpha * dv + (1 - alpha) * sd
+      if (so != null) emaOut.set(t, so)
+      if (sd != null) emaDelta.set(t, sd)
+    }
+    const rows = []
+    for (const [t, y] of S[roomKey].points) {
+      if (emaOut.has(t) && emaDelta.has(t)) rows.push([emaOut.get(t), emaDelta.get(t), y])
+    }
+    if (rows.length < 100) continue
+    // normal equations for y = p + q*x1 + c*x2
+    let n = rows.length, s1 = 0, s2 = 0, sy = 0, s11 = 0, s22 = 0, s12 = 0, s1y = 0, s2y = 0, syy = 0
+    for (const [x1, x2, yv] of rows) {
+      s1 += x1; s2 += x2; sy += yv; s11 += x1 * x1; s22 += x2 * x2; s12 += x1 * x2; s1y += x1 * yv; s2y += x2 * yv; syy += yv * yv
+    }
+    const det = n * (s11 * s22 - s12 * s12) - s1 * (s1 * s22 - s12 * s2) + s2 * (s1 * s12 - s11 * s2)
+    if (Math.abs(det) < 1e-9) continue
+    const p = (sy * (s11 * s22 - s12 * s12) - s1 * (s1y * s22 - s12 * s2y) + s2 * (s1y * s12 - s11 * s2y)) / det
+    const q = (n * (s1y * s22 - s12 * s2y) - sy * (s1 * s22 - s12 * s2) + s2 * (s1 * s2y - s1y * s2)) / det
+    const c = (n * (s11 * s2y - s1y * s12) - s1 * (s1 * s2y - s1y * s2) + sy * (s1 * s12 - s11 * s2)) / det
+    let sse = 0
+    for (const [x1, x2, yv] of rows) { const e = yv - (p + q * x1 + c * x2); sse += e * e }
+    const sst = syy - sy * sy / n
+    const r2 = sst ? 1 - sse / sst : 0
+    if (!best || r2 > best.r2) best = { tau, p, q, c, r2, n, emaOut, emaDelta }
+  }
+  return best
+}
+
+function renderInsulation (r) {
+  const statsEl = document.getElementById('insul-stats')
+  const roomKey = 'hallway_bathroom'
+  const fit = renderInsulation.fit = renderInsulation.fit || fitRoomModel(roomKey)
+  if (!fit || fit.c <= 0) { statsEl.textContent = 'Could not fit a positive attic coupling for the hallway bathroom yet.'; return }
+  const dr = hottestDayRange(r)
+  if (!dr) { statsEl.textContent = 'No data in range.'; return }
+
+  const R38 = 38
+  const scenario = rNow => {
+    const factor = rNow / R38
+    const pts = []
+    for (const [t] of clip(S[roomKey].points, dr)) {
+      if (fit.emaOut.has(t) && fit.emaDelta.has(t)) {
+        pts.push([t, Math.round((fit.p + fit.q * fit.emaOut.get(t) + fit.c * factor * fit.emaDelta.get(t)) * 10) / 10])
+      }
+    }
+    return pts
+  }
+  const fitted = scenario(R38), central = scenario(12), lowR = scenario(15), highR = scenario(10)
+  const measured = clip(S[roomKey].points, dr)
+
+  const cOut = cssVar('--c-outdoor'), cRoom = cssVar('--c-room'), cModel = cssVar('--c-model')
+  legend(document.getElementById('legend-insul'), [
+    { color: cOut, label: 'Outdoor (measured, dotted)', dash: '2 5' },
+    { color: cRoom, label: 'Hallway bathroom (measured, solid)' },
+    { color: cModel, label: 'Hallway bathroom at R-38 (modeled, dashed, band)', dash: '8 5' },
+  ])
+  drawChart(document.getElementById('chart-insul'), {
+    series: [
+      { points: clip(S.outdoor.points, dr), color: cOut, label: 'Outdoor', dash: '2 5' },
+      { points: measured, color: cRoom, label: 'Measured' },
+      { points: central, color: cModel, label: 'At R-38 (est.)', dash: '8 5', width: 2.5 },
+    ],
+    ribbons: [{ upper: lowR, lower: highR, color: cModel }],
+    range: dr, height: 240,
+  })
+
+  const peakOf = pts => pts.length ? Math.max(...pts.map(p => p[1])) : null
+  const evening = pts => { const p = pts.filter(q2 => { const h = parseInt(new Date(q2[0] * 1000).toLocaleTimeString('en-US', { hour: 'numeric', hour12: false, timeZone: TZ }), 10); return h === 21 }); return p.length ? p.reduce((u, v) => u + v[1], 0) / p.length : null }
+  const fmt1 = v => v == null ? '—' : v.toFixed(1)
+  const mPeak = peakOf(measured), cPeak = peakOf(central)
+  const mEve = evening(measured), cEve = evening(central)
+
+  // attic-coupled share of room drivers -> AC energy translation
+  const share = fit.c / (fit.c + Math.max(fit.q, 0.0001))
+  const cut = mid => 1 - mid / R38
+  const acDaily = 8.3 // measured kWh/day across the three bedroom AC outlets
+  const savedMid = share * cut(12) * acDaily
+  const savedLo = share * cut(15) * acDaily
+  const savedHi = share * cut(10) * acDaily
+
+  const econ = key => parseFloat(document.getElementById('econ-' + key).value) || 0
+  const rate = econ('rate'), days = econ('days'), sqft = econ('sqft'), unit = econ('unit')
+  const spendYr = acDaily * days * rate
+  const saveYr = savedMid * days * rate
+  const installCost = sqft * unit
+  const payback = saveYr > 0 ? installCost / saveYr : null
+  const usd = v => '$' + Math.round(v).toLocaleString()
+
+  statsEl.textContent =
+    `Fit: R²=${fit.r2.toFixed(2)} over ${fit.n} samples, room time constant ~${Math.round(fit.tau / 3600)}h; ` +
+    `attic coupling is ${(share * 100).toFixed(0)}% of the room's temperature drivers. ` +
+    `${fmtDay(dr.start)}: hallway bathroom peak ${fmt1(mPeak)} -> ${fmt1(cPeak)}°F at R-38, 9 PM ${fmt1(mEve)} -> ${fmt1(cEve)}°F. ` +
+    `Ceiling heat flux drops ~${Math.round(cut(12) * 100)}% (band ${Math.round(cut(15) * 100)}–${Math.round(cut(10) * 100)}%), ` +
+    `saving roughly ${savedLo.toFixed(1)}–${savedHi.toFixed(1)} kWh/day of bedroom AC (central ${savedMid.toFixed(1)}). ` +
+    `With the assumptions above: you spend ~${usd(spendYr)}/yr running the bedroom ACs; ` +
+    `~${usd(installCost)} of insulation saves ~${usd(saveYr)}/yr of that` +
+    (payback ? ` — ${payback.toFixed(0)}-year payback on summer AC alone` : '') +
+    '. Winter heating savings (soon: heat pump kWh) and comfort are on top of this and likely dominate the real return.'
+
+  renderTable(document.getElementById('table-insul'),
+    [{ label: 'Outdoor', points: clip(S.outdoor.points, dr) }, { label: 'Measured', points: measured },
+     { label: 'Fitted (as-is)', points: fitted }, { label: 'At R-38 (est.)', points: central }], dr)
+}
+
 // ---- wind vs attic residuals -----------------------------------------------------
 function scatterChart (mount, opts) {
   mount.innerHTML = ''
@@ -950,6 +1121,7 @@ function render () {
 
   renderModel(r)
   renderVent(r)
+  renderInsulation(r)
   renderWind()
 
   // room panels on a shared y-domain
@@ -1014,6 +1186,15 @@ for (const preset of PRESETS) {
     render()
   })
   filterBar.appendChild(btn)
+}
+
+for (const input of document.querySelectorAll('.assume input')) {
+  const saved = localStorage.getItem('solargain-' + input.id)
+  if (saved !== null) input.value = saved
+  input.addEventListener('input', () => {
+    localStorage.setItem('solargain-' + input.id, input.value)
+    renderInsulation(range)
+  })
 }
 
 for (const btn of document.querySelectorAll('.table-toggle')) {

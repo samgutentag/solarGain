@@ -56,4 +56,8 @@ CLIMATE_ENTITIES = {
 # slope. threshold_w marks "compressor running": above standby, below compressor.
 POWER_AC_SENSORS = {
     'bedroom_ac': {'entity_id': 'sensor.bedroom_ac_energy_today', 'label': 'Bedroom AC', 'threshold_w': 150},
+    # renamed a device and the integration minted a new entity id? Use
+    # 'entity_ids' (list) instead of 'entity_id' and the fetcher splices the
+    # old and new history streams into one continuous series:
+    # 'guest_ac': {'entity_ids': ['sensor.old_id_1d', 'sensor.new_id_energy_today'], 'label': 'Guest AC', 'threshold_w': 150},
 }

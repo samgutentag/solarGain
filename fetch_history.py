@@ -232,15 +232,23 @@ def fetch(days):
     known_ids = {s['entity_id'] for s in states}
     acpower = {}
     for key, spec in POWER_AC_SENSORS.items():
-        if spec['entity_id'] not in known_ids:
-            print(f'  WARN: {spec["entity_id"]} not found, skipping {spec["label"]}', file=sys.stderr)
+        # 'entity_ids' (list) splices history across renames: an integration
+        # rename mints a new entity id and strands the old history under the
+        # old one. Same physical plug, same cumulative counter, so the raw
+        # streams concatenate cleanly.
+        ids = spec.get('entity_ids') or [spec['entity_id']]
+        found = [eid for eid in ids if eid in known_ids]
+        raw = []
+        for eid in ids:
+            raw.extend(history_for(eid))
+        if not raw and not found:
+            print(f'  WARN: none of {ids} found, skipping {spec["label"]}', file=sys.stderr)
             continue
-        raw = history_for(spec['entity_id'])
         power = energy_daily_to_power(raw, start, end)
         segs = power_segments(power, spec['threshold_w'])
         climate[key] = {'label': spec['label'], 'segments': segs}
         acpower[key] = {'label': spec['label'], 'points': power}
-        print(f'  {spec["label"]}: {len(segs)} run segments (power-derived)')
+        print(f'  {spec["label"]}: {len(segs)} run segments (power-derived, {len(ids)} id(s))')
 
     return build_payload(start, end, series, climate, acpower)
 

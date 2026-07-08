@@ -294,7 +294,6 @@ def mock(days):
         'bathroom': lambda ts: room(ts, 0.55, 3.0),
         'hallway_bathroom': lambda ts: room(ts, 0.6, 4.5),
         'garage': lambda ts: outdoor(ts - 3600) + 6,
-        'shed': lambda ts: outdoor(ts - 1800) + 2,
     }
     for key, gen in generators.items():
         spec = specs[key]

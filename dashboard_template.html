@@ -917,7 +917,10 @@ function renderInsulation (r) {
   // attic-coupled share of room drivers -> AC energy translation
   const share = fit.c / (fit.c + Math.max(fit.q, 0.0001))
   const cut = mid => 1 - mid / R38
-  const acDaily = 8.3 // measured kWh/day across the three bedroom AC outlets
+  // measured kWh/day across every metered AC unit, over the full dataset
+  let acTotal = 0
+  for (const key in DATA.acpower || {}) for (const p of DATA.acpower[key].points) acTotal += p[1] / 1000 * (10 / 60)
+  const acDaily = acTotal / Math.max((DATA.range.end - DATA.range.start) / 86400, 1)
   const savedMid = share * cut(12) * acDaily
   const savedLo = share * cut(15) * acDaily
   const savedHi = share * cut(10) * acDaily
@@ -935,8 +938,8 @@ function renderInsulation (r) {
     `attic coupling is ${(share * 100).toFixed(0)}% of the room's temperature drivers. ` +
     `${fmtDay(dr.start)}: hallway bathroom peak ${fmt1(mPeak)} -> ${fmt1(cPeak)}°F at R-38, 9 PM ${fmt1(mEve)} -> ${fmt1(cEve)}°F. ` +
     `Ceiling heat flux drops ~${Math.round(cut(12) * 100)}% (band ${Math.round(cut(15) * 100)}–${Math.round(cut(10) * 100)}%), ` +
-    `saving roughly ${savedLo.toFixed(1)}–${savedHi.toFixed(1)} kWh/day of bedroom AC (central ${savedMid.toFixed(1)}). ` +
-    `With the assumptions above: you spend ~${usd(spendYr)}/yr running the bedroom ACs; ` +
+    `saving roughly ${savedLo.toFixed(1)}–${savedHi.toFixed(1)} kWh/day of AC (central ${savedMid.toFixed(1)}, from a measured ${acDaily.toFixed(1)} kWh/day across all metered units). ` +
+    `With the assumptions above: you spend ~${usd(spendYr)}/yr running the ACs; ` +
     `~${usd(installCost)} of insulation saves ~${usd(saveYr)}/yr of that` +
     (payback ? ` — ${payback.toFixed(0)}-year payback on summer AC alone` : '') +
     '. Winter heating savings (soon: heat pump kWh) and comfort are on top of this and likely dominate the real return.'

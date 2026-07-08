@@ -17,7 +17,6 @@
     --c-outdoor: #2a78d6;
     --c-attic: #eb6834;
     --c-solar: #eda100;
-    --c-console: #4a3aa7;
     --c-room: #1baf7a;
     --c-delta-warm: #e34948;
     --c-delta-cool: #2a78d6;
@@ -37,7 +36,6 @@
       --c-outdoor: #3987e5;
       --c-attic: #d95926;
       --c-solar: #c98500;
-      --c-console: #9085e9;
       --c-room: #199e70;
       --c-delta-warm: #e66767;
       --c-delta-cool: #3987e5;
@@ -158,7 +156,7 @@
   <div class="card-head">
     <div>
       <h2>Room by room</h2>
-      <div class="sub">Each room (green) against outdoor and attic context (gray). Shared temperature scale. Blue bands mark that room's AC running.</div>
+      <div class="sub">Each room (green) against outdoor and attic context (gray). Shared temperature scale. Blue bands mark that room's AC running (kitchen shares the living room unit; bedroom bands are power-derived from the Emporia outlets).</div>
     </div>
     <button class="table-toggle" data-table="rooms">table</button>
   </div>
@@ -240,6 +238,8 @@ function timeTicks (r) {
         prevDay = day
       }
     }
+    // drop the range-start tick when the first midnight lands almost on top of it
+    if (ticks.length > 1 && ticks[1].t - ticks[0].t < span * 0.05) ticks.shift()
   }
   return ticks
 }
@@ -429,8 +429,20 @@ function computeStats (r) {
   const medianLag = lags.length ? lags[Math.floor(lags.length / 2)] : null
 
   let acSeconds = 0
-  for (const key of ['bedroom_ac', 'living_room_ac']) {
+  for (const key of ['bedroom_ac', 'living_room_ac', 'north_bedroom_ac', 'south_bedroom_ac']) {
     for (const seg of acBands(key, r)) acSeconds += Math.min(seg[1], r.end) - Math.max(seg[0], r.start)
+  }
+
+  // AC energy from the power-derived series, and how much of it overlapped solar production
+  const solarByT = new Map(solar.map(p => [p[0], p[1]]))
+  let acKwh = 0, acKwhSolar = 0
+  for (const key in DATA.acpower || {}) {
+    for (const p of clip(DATA.acpower[key].points, r)) {
+      const kwh = p[1] / 1000 * (10 / 60)
+      acKwh += kwh
+      const sp = solarByT.get(p[0])
+      if (sp != null && sp > 0.5) acKwhSolar += kwh
+    }
   }
 
   // evening crossover: first time after 4pm when outdoor < mean room temp
@@ -454,7 +466,7 @@ function computeStats (r) {
     }
   }
 
-  return { atticPeak, outdoorPeak, deltaPeak, solarPeak, medianLag, acSeconds, crossovers, lagsCount: lags.length }
+  return { atticPeak, outdoorPeak, deltaPeak, solarPeak, medianLag, acSeconds, acKwh, acKwhSolar, crossovers, lagsCount: lags.length }
 }
 
 function fmtDur (sec) {
@@ -470,7 +482,8 @@ function renderKpis (stats) {
     { label: 'Outdoor peak', value: stats.outdoorPeak ? stats.outdoorPeak[1].toFixed(1) + '°F' : '—', sub: stats.outdoorPeak ? fmtStamp(stats.outdoorPeak[0]) : '' },
     { label: 'Max attic − outdoor', value: stats.deltaPeak ? '+' + stats.deltaPeak[1].toFixed(1) + '°F' : '—', sub: stats.deltaPeak ? fmtStamp(stats.deltaPeak[0]) : '' },
     { label: 'Attic lag after solar peak', value: stats.medianLag ? fmtDur(stats.medianLag) : '—', sub: stats.lagsCount ? `median of ${stats.lagsCount} day(s)` : 'needs a sunny day in range' },
-    { label: 'Portable AC runtime', value: fmtDur(stats.acSeconds), sub: 'bedroom + living room' },
+    { label: 'Portable AC runtime', value: fmtDur(stats.acSeconds), sub: 'all four units, summed' },
+    { label: 'Bedroom AC energy', value: stats.acKwh ? stats.acKwh.toFixed(1) + ' kWh' : '—', sub: stats.acKwh ? Math.round(stats.acKwhSolar / stats.acKwh * 100) + '% while solar producing' : 'needs Emporia outlet data' },
   ]
   for (const t of tiles) {
     const div = document.createElement('div')
@@ -504,15 +517,20 @@ function renderInsights (stats, r) {
     const label = new Date(2000, 0, 1, hh, mm).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
     add(`Evenings, outdoor air drops below the average room temperature around <span class="num">${esc(label)}</span> — after that, moving outside air in beats running compressors.`)
   }
-  // AC effect: bedroom vs north bedroom while bedroom AC runs
+  // AC effect: bedroom vs the unconditioned hallway bathroom while the bedroom AC runs
   const bands = acBands('bedroom_ac', r)
-  if (bands.length && S.bedroom && S.north_bedroom) {
-    const north = new Map(clip(S.north_bedroom.points, r).map(p => [p[0], p[1]]))
+  if (bands.length && S.bedroom && S.hallway_bathroom) {
+    const ref = new Map(clip(S.hallway_bathroom.points, r).map(p => [p[0], p[1]]))
     let sum = 0, n = 0
     for (const p of clip(S.bedroom.points, r)) {
-      if (north.has(p[0]) && bands.some(b => p[0] >= b[0] && p[0] <= b[1])) { sum += north.get(p[0]) - p[1]; n++ }
+      if (ref.has(p[0]) && bands.some(b => p[0] >= b[0] && p[0] <= b[1])) { sum += ref.get(p[0]) - p[1]; n++ }
     }
-    if (n > 5) add(`While the bedroom AC runs, the bedroom sits <span class="num">${(sum / n).toFixed(1)}°F</span> cooler than the unconditioned North Bedroom — that gap is what the compressor is buying.`)
+    if (n > 5) add(`While the bedroom AC runs, the bedroom sits <span class="num">${(sum / n).toFixed(1)}°F</span> cooler than the unconditioned hallway bathroom — that gap is what the compressor is buying.`)
+  }
+  if (stats.acKwh > 0.5) {
+    const pct = Math.round(stats.acKwhSolar / stats.acKwh * 100)
+    add(`The bedroom ACs drew <span class="num">${stats.acKwh.toFixed(1)} kWh</span> in this range, and only ` +
+        `<span class="num">${pct}%</span> of it while the panels were producing — the rest came off the battery or the grid, fighting heat the attic banked earlier.`)
   }
 }
 
@@ -541,16 +559,15 @@ function render () {
   renderInsights(stats, r)
 
   const cOut = cssVar('--c-outdoor'), cAttic = cssVar('--c-attic'), cSolar = cssVar('--c-solar')
-  const cConsole = cssVar('--c-console'), cRoom = cssVar('--c-room'), cCtx = cssVar('--c-context')
+  const cRoom = cssVar('--c-room'), cCtx = cssVar('--c-context')
 
   const driverSeries = [
     { points: clip(S.outdoor.points, r), color: cOut, label: 'Outdoor' },
     { points: clip(S.attic.points, r), color: cAttic, label: 'Attic' },
-    { points: clip(S.ecowitt_console.points, r), color: cConsole, label: 'Ecowitt console', opacity: 0.75 },
   ]
   legend(document.getElementById('legend-driver'), [
     { color: cOut, label: 'Outdoor' }, { color: cAttic, label: 'Attic' },
-    { color: cConsole, label: 'Ecowitt console (location TBD)' }, { color: cSolar, label: 'Solar production (lower chart)' },
+    { color: cSolar, label: 'Solar production (lower chart)' },
   ])
   drawChart(document.getElementById('chart-driver'), { series: driverSeries, range: r, height: 240, xAxis: false })
   drawChart(document.getElementById('chart-solar'), {
@@ -607,7 +624,7 @@ function render () {
 
   renderTable(document.getElementById('table-driver'),
     [{ label: 'Outdoor', points: S.outdoor.points }, { label: 'Attic', points: S.attic.points },
-     { label: 'Console', points: S.ecowitt_console.points }, { label: 'Solar kW', points: S.solar_power.points }], r)
+     { label: 'Solar kW', points: S.solar_power.points }], r)
   renderTable(document.getElementById('table-delta'), [{ label: 'Attic − outdoor °F', points: delta }], r)
   renderTable(document.getElementById('table-rooms'), panelKeys.map(k => ({ label: S[k].label, points: S[k].points })), r)
 }

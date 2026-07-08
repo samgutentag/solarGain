@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from entities import CLIMATE_ENTITIES, SOLAR_SENSORS, TEMPERATURE_SENSORS
+from entities import CLIMATE_ENTITIES, POWER_AC_SENSORS, SOLAR_SENSORS, TEMPERATURE_SENSORS
 
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / 'data' / 'history.json'
@@ -75,6 +75,10 @@ def resolve_entity_ids(states, wanted):
         ids = by_name.get(target, [])
         if not ids:
             ids = [eid for name, eids in by_name.items() if target.lower() in name.lower() for eid in eids]
+        if len(ids) > 1:
+            sensors_only = [eid for eid in ids if eid.startswith('sensor.')]
+            if len(sensors_only) == 1:
+                ids = sensors_only
         if len(ids) == 1:
             resolved[key] = ids[0]
         else:
@@ -116,6 +120,52 @@ def climate_segments(raw, start, end):
     if current_state not in (None, 'off', 'unavailable', 'unknown') and seg_start:
         segments.append([int(seg_start.timestamp()), int(end.timestamp()), current_state])
     return segments
+
+
+def energy_daily_to_power(raw, start, end):
+    """Derive average watts per bucket from a cumulative daily-kWh sensor.
+
+    The sensor climbs through the day and resets at midnight; negative diffs
+    (resets) and gaps are skipped. Returns [[epoch_s, watts], ...].
+    """
+    bucket_s = BUCKET_MINUTES * 60
+    buckets = {}
+    for item in raw:
+        try:
+            value = float(item['state'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        ts = datetime.fromisoformat(item['last_changed'].replace('Z', '+00:00'))
+        if not (start <= ts <= end):
+            continue
+        slot = int(ts.timestamp() // bucket_s)
+        buckets[slot] = max(buckets.get(slot, 0.0), value)
+    points = []
+    ordered = sorted(buckets.items())
+    for (slot_a, kwh_a), (slot_b, kwh_b) in zip(ordered, ordered[1:]):
+        diff = kwh_b - kwh_a
+        gap_hours = (slot_b - slot_a) * bucket_s / 3600
+        if diff >= 0 and gap_hours <= 1:
+            points.append([slot_b * bucket_s, round(diff * 1000 / gap_hours, 1)])
+    return points
+
+
+def power_segments(points, threshold_w, bridge_s=1800):
+    """Runs of sustained draw above threshold, bridging short compressor-cycle gaps."""
+    bucket_s = BUCKET_MINUTES * 60
+    segments = []
+    current = None
+    for ts, watts in points:
+        if watts >= threshold_w:
+            if current and ts - current[1] <= bridge_s:
+                current[1] = ts + bucket_s
+            else:
+                if current:
+                    segments.append(current)
+                current = [ts, ts + bucket_s]
+    if current:
+        segments.append(current)
+    return [[a, b, 'cool'] for a, b in segments]
 
 
 def fetch(days):
@@ -172,16 +222,30 @@ def fetch(days):
         climate[key] = {'label': spec['label'], 'segments': segs}
         print(f'  {spec["label"]}: {len(segs)} run segments')
 
-    return build_payload(start, end, series, climate)
+    known_ids = {s['entity_id'] for s in states}
+    acpower = {}
+    for key, spec in POWER_AC_SENSORS.items():
+        if spec['entity_id'] not in known_ids:
+            print(f'  WARN: {spec["entity_id"]} not found, skipping {spec["label"]}', file=sys.stderr)
+            continue
+        raw = history_for(spec['entity_id'])
+        power = energy_daily_to_power(raw, start, end)
+        segs = power_segments(power, spec['threshold_w'])
+        climate[key] = {'label': spec['label'], 'segments': segs}
+        acpower[key] = {'label': spec['label'], 'points': power}
+        print(f'  {spec["label"]}: {len(segs)} run segments (power-derived)')
+
+    return build_payload(start, end, series, climate, acpower)
 
 
-def build_payload(start, end, series, climate):
+def build_payload(start, end, series, climate, acpower):
     return {
         'generated_at': datetime.now(LOCAL_TZ).isoformat(),
         'timezone': 'America/Los_Angeles',
         'range': {'start': int(start.timestamp()), 'end': int(end.timestamp())},
         'series': series,
         'climate': climate,
+        'acpower': acpower,
     }
 
 
@@ -222,12 +286,11 @@ def mock(days):
     generators = {
         'outdoor': lambda ts: outdoor(ts),
         'attic': lambda ts: attic(ts),
-        'ecowitt_console': lambda ts: attic(ts) + 3,
         'bedroom': lambda ts: room(ts, 0.35, 0.5, 'bedroom_ac'),
         'living_room': lambda ts: room(ts, 0.45, 1.5, 'living_room_ac'),
         'kitchen': lambda ts: room(ts, 0.5, 2.0),
-        'north_bedroom': lambda ts: room(ts, 0.4, 0.0),
-        'south_bedroom': lambda ts: room(ts, 0.42, 1.0),
+        'north_bedroom': lambda ts: room(ts, 0.4, 0.0, 'north_bedroom_ac'),
+        'south_bedroom': lambda ts: room(ts, 0.42, 1.0, 'south_bedroom_ac'),
         'bathroom': lambda ts: room(ts, 0.55, 3.0),
         'hallway_bathroom': lambda ts: room(ts, 0.6, 4.5),
         'garage': lambda ts: outdoor(ts - 3600) + 6,
@@ -245,8 +308,12 @@ def mock(days):
         'points': [[ts, solar(ts)] for ts in timestamps],
     }
 
-    climate = {}
-    for key, label in (('bedroom_ac', 'Bedroom AC'), ('living_room_ac', 'Living Room AC')):
+    climate, acpower = {}, {}
+    ac_units = (
+        ('bedroom_ac', 'Bedroom AC'), ('living_room_ac', 'Living Room AC'),
+        ('north_bedroom_ac', 'North Bedroom AC'), ('south_bedroom_ac', 'South Bedroom AC'),
+    )
+    for key, label in ac_units:
         segs = []
         day = datetime.fromtimestamp(t0, LOCAL_TZ).replace(hour=14, minute=0, second=0, microsecond=0)
         while day.timestamp() < t1:
@@ -254,9 +321,13 @@ def mock(days):
             segs.append([seg_start, seg_start + 8 * 3600, 'cool'])
             day += timedelta(days=1)
         climate[key] = {'label': label, 'segments': segs}
+        if key != 'living_room_ac':
+            acpower[key] = {'label': label, 'points': [
+                [ts, 520.0 if any(a <= ts <= b for a, b, _ in segs) else 0.0] for ts in timestamps
+            ]}
     climate['ecobee'] = {'label': 'Ecobee (central)', 'segments': []}
 
-    return build_payload(start, end, series, climate)
+    return build_payload(start, end, series, climate, acpower)
 
 
 def main():

@@ -19,6 +19,7 @@
     --c-solar: #eda100;
     --c-room: #1baf7a;
     --c-model: #4a3aa7;
+    --c-wind: #e87ba4;
     --c-delta-warm: #e34948;
     --c-delta-cool: #2a78d6;
     --c-context: #898781;
@@ -39,6 +40,7 @@
       --c-solar: #c98500;
       --c-room: #199e70;
       --c-model: #9085e9;
+      --c-wind: #d55181;
       --c-delta-warm: #e66767;
       --c-delta-cool: #3987e5;
       --ac-band: rgba(57, 135, 229, 0.14);
@@ -167,6 +169,20 @@
   <div class="chart-wrap" id="chart-model"></div>
   <div class="sub" id="model-stats"></div>
   <div class="dtable" id="table-model"></div>
+</div>
+
+<div class="card">
+  <div class="card-head">
+    <div>
+      <h2>Does wind flush the attic?</h2>
+      <div class="sub">Each dot is a 10-minute interval with meaningful solar heat in the attic: how much hotter or cooler the attic ran than solar alone predicts (y) vs wind speed (x). A downward trend means wind is moving air through the vents; flat means the tucked-under-the-eaves intake is the bottleneck. Full dataset, ignores the range filter. Suggestive, not proof — wind and time of day travel together.</div>
+    </div>
+    <button class="table-toggle" data-table="wind">table</button>
+  </div>
+  <div class="legend" id="legend-wind"></div>
+  <div class="chart-wrap" id="chart-wind"></div>
+  <div class="sub" id="wind-stats"></div>
+  <div class="dtable" id="table-wind"></div>
 </div>
 
 <div class="card">
@@ -673,6 +689,132 @@ function renderModel (r) {
      { label: 'Fitted (no barrier)', points: fitted }, { label: 'With barrier (est.)', points: central }], dr)
 }
 
+// ---- wind vs attic residuals -----------------------------------------------------
+function scatterChart (mount, opts) {
+  mount.innerHTML = ''
+  const W = 1100, H = 260
+  const M = { top: 10, right: 14, bottom: 34, left: 44 }
+  const pw = W - M.left - M.right, ph = H - M.top - M.bottom
+  const svg = el('svg', { viewBox: `0 0 ${W} ${H}` }, mount)
+  const xs = opts.pairs.map(p => p[0]), ys = opts.pairs.map(p => p[1])
+  const xMax = Math.max(...xs) * 1.05 || 1
+  let yLo = Math.min(...ys), yHi = Math.max(...ys)
+  const pad = (yHi - yLo) * 0.08 || 1
+  yLo -= pad; yHi += pad
+  const x = v => M.left + v / xMax * pw
+  const y = v => M.top + (yHi - v) / (yHi - yLo) * ph
+
+  for (const v of niceTicks(yLo, yHi, 5)) {
+    el('line', { x1: M.left, x2: M.left + pw, y1: y(v), y2: y(v), stroke: cssVar('--grid'), 'stroke-width': 1 }, svg)
+    el('text', { x: M.left - 8, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: cssVar('--text-muted') }, svg).textContent = String(v)
+  }
+  for (const v of niceTicks(0, xMax, 8)) {
+    el('text', { x: x(v), y: H - 14, 'text-anchor': 'middle', 'font-size': 11, fill: cssVar('--text-muted') }, svg).textContent = String(v)
+  }
+  el('text', { x: M.left + pw / 2, y: H - 1, 'text-anchor': 'middle', 'font-size': 11, fill: cssVar('--text-muted') }, svg).textContent = opts.xLabel
+  if (yLo < 0 && yHi > 0) el('line', { x1: M.left, x2: M.left + pw, y1: y(0), y2: y(0), stroke: cssVar('--baseline'), 'stroke-width': 1.5 }, svg)
+
+  for (const p of opts.pairs) {
+    el('circle', { cx: x(p[0]).toFixed(1), cy: y(p[1]).toFixed(1), r: 2.5, fill: opts.color, opacity: 0.3 }, svg)
+  }
+  if (opts.binned.length > 1) {
+    el('polyline', {
+      points: opts.binned.map(b => `${x(b[0]).toFixed(1)},${y(b[1]).toFixed(1)}`).join(' '),
+      fill: 'none', stroke: opts.color, 'stroke-width': 3, 'stroke-linejoin': 'round', 'stroke-linecap': 'round',
+    }, svg)
+    for (const b of opts.binned) {
+      el('circle', { cx: x(b[0]).toFixed(1), cy: y(b[1]).toFixed(1), r: 4.5, fill: opts.color, stroke: cssVar('--surface-1'), 'stroke-width': 2 }, svg)
+    }
+  }
+
+  const tip = document.createElement('div')
+  tip.className = 'tooltip'
+  mount.appendChild(tip)
+  svg.addEventListener('pointermove', ev => {
+    if (!opts.binned.length) return
+    const rect = svg.getBoundingClientRect()
+    const wx = (ev.clientX - rect.left) / rect.width * W
+    let best = opts.binned[0]
+    for (const b of opts.binned) if (Math.abs(x(b[0]) - wx) < Math.abs(x(best[0]) - wx)) best = b
+    tip.textContent = ''
+    const head = document.createElement('div'); head.className = 'tt-time'
+    head.textContent = `~${best[0].toFixed(1)} mph (${best[2]} samples)`
+    const row = document.createElement('div'); row.className = 'tt-row'
+    const key = document.createElement('span'); key.className = 'tt-key'; key.style.background = opts.color
+    const val = document.createElement('span'); val.className = 'tt-val'; val.textContent = `${best[1] > 0 ? '+' : ''}${best[1].toFixed(1)}°F`
+    const name = document.createElement('span'); name.className = 'tt-name'; name.textContent = 'mean residual'
+    row.append(key, val, name)
+    tip.append(head, row)
+    tip.style.display = 'block'
+    tip.style.left = Math.min(x(best[0]) / W * mount.clientWidth + 14, mount.clientWidth - 170) + 'px'
+    tip.style.top = '10px'
+  })
+  svg.addEventListener('pointerleave', () => { tip.style.display = 'none' })
+}
+
+function renderWind () {
+  const statsEl = document.getElementById('wind-stats')
+  if (!MODEL || !S.wind_speed) { statsEl.textContent = 'Needs the fitted model and wind history.'; return }
+  const out = new Map(S.outdoor.points)
+  const wind = new Map(S.wind_speed.points)
+  const pairs = []
+  for (const [t, atticV] of S.attic.points) {
+    if (!out.has(t) || !wind.has(t) || !MODEL.ema.has(t)) continue
+    const excess = MODEL.b * MODEL.ema.get(t)
+    if (excess < 5) continue // only hours with real solar heat to flush
+    const residual = (atticV - out.get(t)) - (MODEL.a + excess)
+    pairs.push([wind.get(t), Math.round(residual * 100) / 100])
+  }
+  if (pairs.length < 40) { statsEl.textContent = `Only ${pairs.length} usable intervals so far — needs more sunny-hour wind data.`; return }
+
+  const binW = 0.5
+  const bins = {}
+  for (const [w, res] of pairs) {
+    const b = Math.floor(w / binW)
+    const cur = bins[b] = bins[b] || [0, 0]
+    cur[0] += res; cur[1]++
+  }
+  const binned = Object.entries(bins)
+    .map(([b, [sum, n]]) => [(+b + 0.5) * binW, sum / n, n])
+    .filter(b => b[2] >= 10)
+    .sort((p, q) => p[0] - q[0])
+
+  const n = pairs.length
+  const xm = pairs.reduce((u, p) => u + p[0], 0) / n, ym = pairs.reduce((u, p) => u + p[1], 0) / n
+  let sxy = 0, sxx = 0, syy = 0
+  for (const [px, py] of pairs) { sxy += (px - xm) * (py - ym); sxx += (px - xm) ** 2; syy += (py - ym) ** 2 }
+  const slope = sxx ? sxy / sxx : 0
+  const corr = (sxx && syy) ? sxy / Math.sqrt(sxx * syy) : 0
+
+  const cWind = cssVar('--c-wind')
+  legend(document.getElementById('legend-wind'), [
+    { color: cWind, label: '10-min interval (dot)', dash: '2 7' },
+    { color: cWind, label: 'Mean per 0.5 mph bin (line, ≥10 samples)' },
+  ])
+  scatterChart(document.getElementById('chart-wind'), { pairs, binned, color: cWind, xLabel: 'wind speed (mph)' })
+
+  const verdict = slope < -0.4 && corr < -0.25
+    ? 'Wind measurably cools the attic — exhaust airflow is doing work, and more vent area should too.'
+    : slope < -0.15 && corr < -0.12
+      ? 'Mild wind sensitivity — some flushing happens, but the vents look supply-limited.'
+      : 'Little to no wind sensitivity — consistent with starved intake; a ridge vent alone may underdeliver without opening up soffit intake.'
+  statsEl.textContent =
+    `${n} solar-hour intervals: slope ${slope.toFixed(2)}°F per mph, correlation r=${corr.toFixed(2)}. ${verdict}`
+
+  const tbl = document.getElementById('table-wind')
+  tbl.textContent = ''
+  const table = document.createElement('table')
+  const head = table.insertRow()
+  for (const h of ['Wind bin (mph)', 'Mean residual (°F)', 'Samples']) { const th = document.createElement('th'); th.textContent = h; head.appendChild(th) }
+  for (const b of binned) {
+    const row = table.insertRow()
+    row.insertCell().textContent = `${(b[0] - binW / 2).toFixed(1)}–${(b[0] + binW / 2).toFixed(1)}`
+    row.insertCell().textContent = b[1].toFixed(2)
+    row.insertCell().textContent = String(b[2])
+  }
+  tbl.appendChild(table)
+}
+
 // ---- tables -------------------------------------------------------------------
 function renderTable (mount, cols, r) {
   mount.textContent = ''
@@ -721,6 +863,7 @@ function render () {
   })
 
   renderModel(r)
+  renderWind()
 
   // room panels on a shared y-domain
   const panelKeys = [...roomKeys, ...refKeys]

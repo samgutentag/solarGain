@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from entities import CLIMATE_ENTITIES, POWER_AC_SENSORS, SOLAR_SENSORS, TEMPERATURE_SENSORS
+from entities import CLIMATE_ENTITIES, POWER_AC_SENSORS, SOLAR_SENSORS, TEMPERATURE_SENSORS, WIND_SENSORS
 
 ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / 'data' / 'history.json'
@@ -184,7 +184,7 @@ def fetch(days):
     print(f'Fetching {days}d of history from {base_url} ...')
 
     states = api_get(base_url, token, '/api/states')
-    all_wanted = {**TEMPERATURE_SENSORS, **SOLAR_SENSORS, **CLIMATE_ENTITIES}
+    all_wanted = {**TEMPERATURE_SENSORS, **SOLAR_SENSORS, **WIND_SENSORS, **CLIMATE_ENTITIES}
     resolved, missing = resolve_entity_ids(states, all_wanted)
     for key, target, ids in missing:
         print(f'  WARN: could not uniquely resolve "{target}" ({key}): {ids or "no match"}', file=sys.stderr)
@@ -199,7 +199,7 @@ def fetch(days):
         return result[0] if result else []
 
     series = {}
-    for key, spec in {**TEMPERATURE_SENSORS, **SOLAR_SENSORS}.items():
+    for key, spec in {**TEMPERATURE_SENSORS, **SOLAR_SENSORS, **WIND_SENSORS}.items():
         if key not in resolved:
             continue
         raw = history_for(resolved[key])
@@ -305,6 +305,10 @@ def mock(days):
     series['solar_power'] = {
         'label': 'Solar production', 'group': 'solar', 'unit': 'kW', 'ac': None,
         'points': [[ts, solar(ts)] for ts in timestamps],
+    }
+    series['wind_speed'] = {
+        'label': 'Wind speed', 'group': 'wind', 'unit': 'mph', 'ac': None,
+        'points': [[ts, round(max(0.0, 3 + 4 * math.sin(2 * math.pi * (day_frac(ts) - 0.5)) + math.sin(ts / 733) * 1.5), 2)] for ts in timestamps],
     }
 
     climate, acpower = {}, {}

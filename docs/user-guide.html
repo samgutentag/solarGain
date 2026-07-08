@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>solarGain: User Guide</title>
+<style>
+  :root {
+    --ink:#1a1a1a; --mute:#555; --faint:#888; --rule:#ddd;
+    --accent:#1f5fc0; --code:#f4f5f7; --warn:#b2741a; --ok:#1d7a4d;
+    --callout:#eef4fb;
+  }
+  * { box-sizing:border-box; }
+  body {
+    font:16px/1.65 Georgia,"Iowan Old Style","Times New Roman",serif;
+    color:var(--ink); max-width:50rem; margin:0 auto; padding:2.5rem 1.5rem 5rem;
+  }
+  h1,h2,h3,h4,th,.lbl,nav,.tag { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif; }
+  h1 { font-size:2rem; margin:0 0 .2rem; line-height:1.15; }
+  .subtitle { color:var(--mute); font-style:italic; margin:0 0 1.5rem; }
+  h2 { font-size:1.35rem; margin:2.4rem 0 .6rem; padding-top:1.1rem; border-top:2px solid var(--rule); }
+  h3 { font-size:1.08rem; margin:1.5rem 0 .35rem; }
+  h4 { font-size:.96rem; margin:1.1rem 0 .25rem; color:var(--mute); }
+  p { margin:.6rem 0; }
+  ul,ol { margin:.5rem 0; padding-left:1.4rem; } li { margin:.4rem 0; }
+  code { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-size:.82em; background:var(--code); padding:.1em .35em; border-radius:3px; }
+  pre { background:var(--code); border:1px solid var(--rule); border-radius:6px; padding:.85rem 1rem; overflow-x:auto; font-size:.8rem; line-height:1.5; font-family:"SF Mono",ui-monospace,Menlo,monospace; }
+  pre code { background:none; padding:0; }
+  table { border-collapse:collapse; width:100%; margin:.8rem 0; font-size:.9rem; }
+  th,td { text-align:left; padding:.42rem .55rem; border-bottom:1px solid var(--rule); vertical-align:top; }
+  th { font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; color:var(--faint); }
+  .note { border-left:3px solid var(--accent); background:var(--callout); padding:.55rem .9rem; margin:.9rem 0; font-size:.95rem; }
+  .warn { border-left:3px solid var(--warn); background:#fdf7ec; padding:.55rem .9rem; margin:.9rem 0; font-size:.95rem; }
+  .ok { border-left:3px solid var(--ok); background:#f1f8f3; padding:.55rem .9rem; margin:.9rem 0; font-size:.95rem; }
+  nav { background:var(--code); border:1px solid var(--rule); border-radius:8px; padding:1rem 1.25rem; margin:1.5rem 0 2rem; font-size:.9rem; }
+  nav h2 { border:none; padding:0; margin:0 0 .5rem; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); }
+  nav ol { margin:0; padding-left:1.3rem; columns:2; column-gap:2rem; }
+  nav a { color:var(--accent); text-decoration:none; }
+  nav a:hover { text-decoration:underline; }
+  .tag { display:inline-block; font-size:.66rem; text-transform:uppercase; letter-spacing:.05em; background:var(--accent); color:#fff; padding:.08rem .42rem; border-radius:3px; vertical-align:middle; margin-left:.4rem; }
+  .defn { margin:.5rem 0; }
+  .defn dt { font-family:-apple-system,system-ui,sans-serif; font-weight:600; font-size:.92rem; }
+  .defn dd { margin:.1rem 0 .7rem; color:var(--ink); }
+  hr.soft { border:none; border-top:1px solid var(--rule); margin:1.6rem 0; }
+  figure { margin:1.6rem 0; }
+  figure .diagram { border:1px solid var(--rule); border-radius:8px; padding:1.1rem 1rem; background:#fff; }
+  figure svg { display:block; max-width:100%; height:auto; margin:0 auto; }
+  figcaption { font-family:-apple-system,system-ui,sans-serif; font-size:.8rem; color:var(--mute); margin-top:.55rem; text-align:center; }
+  .svg-label { font-family:-apple-system,"Segoe UI",system-ui,sans-serif; }
+  .updated { color:var(--faint); font-size:.8rem; font-family:-apple-system,system-ui,sans-serif; }
+  @media print {
+    body { max-width:none; font-size:11.5pt; }
+    nav { break-inside:avoid; }
+    h2 { break-after:avoid; }
+    table,.note,.warn,.ok,figure { break-inside:avoid; }
+    a { color:inherit; text-decoration:none; }
+  }
+</style>
+</head>
+<body>
+
+<h1>solarGain: User Guide</h1>
+<p class="subtitle">How to point it at your Home Assistant, run it, and read every chart it draws. Written to be read cold, with no prior knowledge of the project assumed.</p>
+
+<nav>
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#what">What this is</a></li>
+    <li><a href="#vocab">Words you need first</a></li>
+    <li><a href="#install">Setup</a></li>
+    <li><a href="#yours">Pointing it at your house</a></li>
+    <li><a href="#run">Running it</a></li>
+    <li><a href="#top">The top strip: filters and tiles</a></li>
+    <li><a href="#cards">The cards, one by one</a></li>
+    <li><a href="#faq">Good to know</a></li>
+  </ol>
+</nav>
+
+<h2 id="what">1. What this is</h2>
+<p>solarGain answers one question with your own sensor data: how much is the sun heating your house, and what is that costing you in air conditioning? It pulls temperature, solar production, wind, and AC power history out of Home Assistant's recorder, then renders it all as a single <code>dashboard.html</code> you can open anywhere. The file carries its data inside it. No server, no chart library, no npm install, no cloud.</p>
+<p>It was built for a specific problem: a one-story house with a hot attic, portable AC units fighting that attic every evening, and a homeowner who wanted numbers before buying a radiant barrier, a ridge vent, or blown-in insulation. The dashboard fits a small thermal model to your own history and shows what each of those upgrades would plausibly do, using your roof, not a marketing brochure.</p>
+<p>What it does not do: it does not control anything (every request is a read-only GET), it does not update live (each run is a snapshot; run it again for fresh data), and it does not phone home.</p>
+<p>The dashboard is one page, top to bottom: a time-range filter, a row of stat tiles, a stack of chart cards (drivers, attic heat load, three what-if scenarios, a wind check, room-by-room panels), and a plain-language "What the data says" list at the end.</p>
+
+<h2 id="vocab">2. Words you need first</h2>
+<dl class="defn">
+  <dt>Recorder</dt>
+  <dd>Home Assistant's built-in history database. solarGain reads it over the REST API. You can only chart what the recorder kept, so if your retention (<code>purge_keep_days</code>) is 10 days, "All" means 10 days.</dd>
+  <dt>Friendly name</dt>
+  <dd>The human label on a Home Assistant entity ("Attic Environment Temperature"), as opposed to its entity ID (<code>sensor.attic_environment_temperature</code>). solarGain finds temperature sensors by friendly name: exact match first, then a unique substring match. AC power sensors are the exception; they are pinned by exact entity ID.</dd>
+  <dt>Long-lived access token</dt>
+  <dd>The API credential you create once in your Home Assistant profile. It goes in a local <code>.env</code> file and never in git.</dd>
+  <dt>Bucket</dt>
+  <dd>Every series is downsampled to 10-minute averages before charting. That is the dashboard's native resolution: one point per bucket.</dd>
+  <dt>Driver</dt>
+  <dd>A series that pushes heat into the house rather than reporting a room: outdoor temperature, attic temperature, and solar production. The solar array doubles as a free irradiance sensor, because panel output tracks the sunshine actually hitting your roof.</dd>
+  <dt>Reference zone</dt>
+  <dd>A space outside the attic envelope (here, a garage with no attic). It shows what the sun does to a room <em>without</em> a hot attic above it, which is the control group for everything else.</dd>
+  <dt>Run band</dt>
+  <dd>A shaded vertical stripe on a room panel marking when that room's AC was actually running. For units on smart outlets this is derived from power draw, not from what the AC's app claims.</dd>
+  <dt>Scenario card</dt>
+  <dd>A chart that fits a small physical model to your measured history, then replays the hottest day with one thing changed (a radiant barrier, more venting, more insulation). Modeled lines are always long-dashed with an uncertainty band; measured lines never are.</dd>
+</dl>
+
+<h2 id="install">3. Setup</h2>
+<p>You need Python 3.9 or newer (for <code>zoneinfo</code>; macOS and any recent Linux qualify) and a Home Assistant instance you can reach on your network. There is nothing to <code>pip install</code>. The whole pipeline is standard library.</p>
+<ol>
+  <li>Clone the repo and <code>cd</code> into it.</li>
+  <li>In Home Assistant: Profile &rarr; Security &rarr; Long-lived access tokens &rarr; Create token.</li>
+  <li>Copy the env template and paste the token in:
+<pre><code>cp .env.example .env
+# then edit .env:
+HASS_TOKEN=eyJhbGciOi...
+HASS_URL=http://homeassistant.local:8123</code></pre></li>
+</ol>
+<div class="warn"><strong>Set <code>HASS_URL</code>.</strong> If you skip it, the fetch script falls back to a hardcoded LAN address that is almost certainly not your Home Assistant. <code>.env</code> is gitignored; keep the token out of commits.</div>
+<p>Want to see the dashboard before creating a token? <code>./run.sh --mock</code> builds it from synthetic data with the expected physics baked in (a diurnal outdoor sine, a solar bell curve, a lagged attic). It is how the charts were developed before real data existed.</p>
+
+<h2 id="yours">4. Pointing it at your house</h2>
+<p><code>entities.py</code> is the single source of truth for what gets fetched. It ships with one specific house in it, so this file is the part you edit. Three maps matter:</p>
+<h3><code>TEMPERATURE_SENSORS</code></h3>
+<p>One entry per sensor. Each has a <code>match</code> (the friendly name to resolve), a <code>label</code> (what the chart shows), and a <code>group</code>: <code>driver</code> for outdoor and attic, <code>room</code> for living spaces, <code>reference</code> for no-attic control zones. A room entry may also carry an <code>ac</code> key naming the AC unit that serves it; that is what links run bands to room panels. Two rooms can share one unit (an open floor plan kitchen and living room, say).</p>
+<p>Minimum viable set: <code>outdoor</code>, <code>attic</code>, and at least one room. The scenario cards need outdoor, attic, and solar to fit anything.</p>
+<h3><code>SOLAR_SENSORS</code> and <code>WIND_SENSORS</code></h3>
+<p>Current solar production in kW (any inverter integration that exposes it) and wind speed in mph (a weather station, or drop it if you have none; the wind card just stays empty).</p>
+<h3><code>POWER_AC_SENSORS</code></h3>
+<p>For AC units on energy-monitoring smart plugs. Point each entry at the plug's <em>cumulative daily energy</em> sensor (the "Energy Today" kind that climbs all day and resets at midnight), by exact entity ID. The fetcher differentiates that curve into watts, then marks the unit "running" wherever sustained draw exceeds <code>threshold_w</code> (150 W by default, comfortably above standby and fans, comfortably below any compressor). Gaps under 30 minutes get bridged so a cycling compressor reads as one run, not twenty.</p>
+<div class="note">Fetching prints a resolution report. Any <code>WARN: could not uniquely resolve</code> line means a friendly name matched zero entities or several; fix the <code>match</code> string until the warnings are gone. The dashboard silently skips series it never received, so a clean fetch log is worth thirty seconds of your attention.</div>
+<p>Two more edit points live in <code>fetch_history.py</code>: <code>LOCAL_TZ</code> (ships as <code>America/Los_Angeles</code>; set your own or every "Today" filter and daily stat is shifted) and <code>DEFAULT_URL</code> (or just set <code>HASS_URL</code> in <code>.env</code> and ignore it).</p>
+
+<h2 id="run">5. Running it</h2>
+<pre><code>./run.sh              # fetch, build, open dashboard.html
+./run.sh --days 3     # smaller fetch window
+./run.sh --mock       # synthetic data, no token needed</code></pre>
+
+<figure>
+  <div class="diagram">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 664 178" width="664" height="178" role="img" aria-label="The solarGain pipeline: Home Assistant's recorder feeds fetch_history.py, which writes data/history.json; build_dashboard.py injects that JSON into the template and writes dashboard.html. The animation scans each script in turn and checks off each file as it is written; frozen, it shows the completed pipeline.">
+    <style>
+      .bar { transform-box: fill-box; transform-origin: left center; }
+      .barF { animation: sgBarF 6s linear infinite; }
+      .barB { animation: sgBarB 6s linear infinite; }
+      .bdgJ { animation: sgBdgJ 6s linear infinite; }
+      .bdgD { animation: sgBdgD 6s linear infinite; }
+      .gloJ { animation: sgGloJ 6s linear infinite; }
+      .gloD { animation: sgGloD 6s linear infinite; }
+      @keyframes sgBarF { 0% { transform: scaleX(0); fill: #e8932a; } 8.333% { transform: scaleX(1); fill: #e8932a; } 9.333%,100% { transform: scaleX(1); fill: #1d9b54; } }
+      @keyframes sgBarB { 0%,13.333% { transform: scaleX(0); fill: #e8932a; } 21.667% { transform: scaleX(1); fill: #e8932a; } 22.667%,100% { transform: scaleX(1); fill: #1d9b54; } }
+      @keyframes sgBdgJ { 0%,11.333% { opacity: 0; } 13.333%,100% { opacity: 1; } }
+      @keyframes sgBdgD { 0%,24.667% { opacity: 0; } 26.667%,100% { opacity: 1; } }
+      @keyframes sgGloJ { 0%,10% { opacity: 0; } 13% { opacity: 0.35; } 20%,100% { opacity: 0.14; } }
+      @keyframes sgGloD { 0%,24% { opacity: 0; } 27% { opacity: 0.35; } 34%,100% { opacity: 0.14; } }
+      @media (prefers-reduced-motion: reduce) {
+        .barF, .barB, .bdgJ, .bdgD, .gloJ, .gloD { animation: none; }
+        .bar { transform: scaleX(1); fill: #1d9b54; }
+        .bdgJ, .bdgD { opacity: 1; }
+        .gloJ, .gloD { opacity: 0.14; }
+      }
+    </style>
+    <rect x="0" y="0" width="664" height="178" rx="10" fill="#ffffff"/>
+    <text x="16" y="26" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" font-weight="700" fill="#3a4350">./run.sh: sensor history in, one HTML file out</text>
+    <g font-family="ui-sans-serif, system-ui, sans-serif">
+      <rect x="16" y="58" width="112" height="46" rx="8" fill="#e3edfc" stroke="#346DDB" stroke-width="1.5"/>
+      <text x="72" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#1f5fc0">Home Assistant</text>
+      <text x="72" y="93" text-anchor="middle" font-size="9" fill="#5b6573">recorder REST API</text>
+      <text x="137" y="85" text-anchor="middle" font-size="13" fill="#9aa3b0">&#8594;</text>
+      <rect x="146" y="58" width="112" height="46" rx="8" fill="#eee7fb" stroke="#7c5cdb" stroke-width="1.5"/>
+      <text x="202" y="78" text-anchor="middle" font-size="10.5" font-weight="700" fill="#5a3fb0">fetch_history.py</text>
+      <text x="202" y="93" text-anchor="middle" font-size="9" fill="#5b6573">resolve, bucket</text>
+      <rect x="146" y="112" width="112" height="5" rx="2.5" fill="#d9dee6"/>
+      <rect class="bar barF" x="146" y="112" width="112" height="5" rx="2.5" fill="#e8932a"/>
+      <text x="267" y="85" text-anchor="middle" font-size="13" fill="#9aa3b0">&#8594;</text>
+      <rect x="276" y="58" width="112" height="46" rx="8" fill="#eef1f5" stroke="#9aa3b0" stroke-width="1.5"/>
+      <rect class="gloJ" x="276" y="58" width="112" height="46" rx="8" fill="#7c5cdb" opacity="0"/>
+      <text x="332" y="78" text-anchor="middle" font-size="10.5" font-weight="700" fill="#5b6573">history.json</text>
+      <text x="332" y="93" text-anchor="middle" font-size="9" fill="#5b6573">10-min snapshot</text>
+      <g class="bdgJ" opacity="0"><circle cx="384" cy="60" r="6.5" fill="#1d9b54" stroke="#fff" stroke-width="1.3"/><polyline points="381,60 383,62.4 387,57.6" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <text x="397" y="85" text-anchor="middle" font-size="13" fill="#9aa3b0">&#8594;</text>
+      <rect x="406" y="58" width="112" height="46" rx="8" fill="#e2f4f1" stroke="#18a394" stroke-width="1.5"/>
+      <text x="462" y="78" text-anchor="middle" font-size="10" font-weight="700" fill="#0e7d70">build_dashboard.py</text>
+      <text x="462" y="93" text-anchor="middle" font-size="9" fill="#5b6573">inject into template</text>
+      <rect x="406" y="112" width="112" height="5" rx="2.5" fill="#d9dee6"/>
+      <rect class="bar barB" x="406" y="112" width="112" height="5" rx="2.5" fill="#e8932a"/>
+      <text x="527" y="85" text-anchor="middle" font-size="13" fill="#9aa3b0">&#8594;</text>
+      <rect x="536" y="58" width="112" height="46" rx="8" fill="#e4f5ea" stroke="#1d9b54" stroke-width="1.5"/>
+      <rect class="gloD" x="536" y="58" width="112" height="46" rx="8" fill="#1d9b54" opacity="0"/>
+      <text x="592" y="78" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1d7a4d">dashboard.html</text>
+      <text x="592" y="93" text-anchor="middle" font-size="9" fill="#5b6573">self-contained</text>
+      <g class="bdgD" opacity="0"><circle cx="644" cy="60" r="6.5" fill="#1d9b54" stroke="#fff" stroke-width="1.3"/><polyline points="641,60 643,62.4 647,57.6" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <text x="16" y="150" font-size="11.5" fill="#5b6573">Data flows left to right: each script scans for 0.5s, and each file gets a check the moment it is written.</text>
+      <text x="16" y="166" font-size="11.5" fill="#5b6573">The dashboard carries its data inside it, so the finished file works with no server and no network.</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption>Because the data is injected at build time, <code>dashboard.html</code> is a snapshot you can email, airdrop, or archive; it will render identically in ten years.</figcaption>
+</figure>
+
+<table>
+  <thead><tr><th>Flag</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--days N</code></td><td><code>10</code></td><td>How many days of history to request. Asking for more than your recorder keeps is harmless; you get what exists.</td></tr>
+    <tr><td><code>--mock</code></td><td>off</td><td>Skip Home Assistant entirely and generate synthetic data. Useful for previewing charts and for hacking on the template.</td></tr>
+  </tbody>
+</table>
+<p>What lands on disk: <code>data/history.json</code> (the snapshot) and <code>dashboard.html</code> (the deliverable). Both are gitignored, because both contain your house's data. Re-running is always safe; each run overwrites both files and touches nothing else.</p>
+
+<h2 id="top">6. The top strip: filters and tiles</h2>
+<p><strong>Range filter.</strong> Five presets: Today, 24 h (the default), 3 days, 7 days, All. Every chart, tile, and insight on the page recomputes for the selected window. Times are your configured timezone, not UTC, so "Today" starts at your local midnight.</p>
+<p><strong>Stat tiles.</strong> The headline numbers for the window:</p>
+<ul>
+  <li><strong>Attic peak / Outdoor peak</strong>, each stamped with when it happened. The gap between these two tiles is the whole story of the project.</li>
+  <li><strong>Max attic &minus; outdoor</strong>: the worst single moment of roof-driven excess.</li>
+  <li><strong>Attic lag after solar peak</strong>: the median, per day, of how long the attic keeps climbing after solar production tops out. That lag is heat soaking through the roof deck. It needs at least one sunny day in the window to compute.</li>
+  <li><strong>AC energy</strong>: total kWh across the metered units, with the share used while the sun was producing (useful if you have solar and are deciding when to spend your cooling).</li>
+  <li><strong>One tile per AC unit</strong>: kWh plus runtime for metered units, runtime only for units without a power sensor.</li>
+</ul>
+
+<h2 id="cards">7. The cards, one by one</h2>
+<p>Every card has a <em>table</em> button in its corner that swaps the chart for the underlying numbers (hourly means). Same data, no chart. Useful for screen readers, spreadsheets, and settling arguments.</p>
+
+<h3>Solar drives the attic</h3>
+<p>Outdoor temperature, attic temperature, and solar production on the same clock. Temperature and kW never share an axis; solar sits in its own aligned panel below, so you can see cause above effect without a dual-axis chart lying to you about scale. Watch a sunny day: solar peaks, then the attic peaks an hour or two later, then radiates into the evening long after the outside air has cooled.</p>
+
+<h3>Attic heat load: attic minus outdoor</h3>
+<p>The same story reduced to one line: how many degrees the roof adds on top of the weather. Zero means the attic is just tracking outside air (typical pre-dawn). The daily hump is pure solar gain. This is the line every upgrade is trying to flatten.</p>
+
+<h3>The three what-if cards</h3>
+<p>Each fits a model to your measured history, then replays the hottest day in the window with one change. Modeled lines are long-dashed with a shaded uncertainty band; the measured attic line stays solid next to them for honest comparison. The fit statistics (R&sup2;, time constant) print under each chart, so you can judge whether the model earned an opinion.</p>
+<ul>
+  <li><strong>Radiant barrier</strong>: removes 15 to 35% of the solar-driven excess. On this house the model said a 3.5 to 8&deg;F peak cut and little evening relief, and the card is kept, marked "ruled out", as the decision record. Your roof may say otherwise.</li>
+  <li><strong>Ridge vent</strong>: different physics. Venting raises the attic's heat-loss conductance, which divides both the solar gain <em>and</em> the flush time, so the evening tail collapses instead of just shaving the peak.</li>
+  <li><strong>R-38 insulation</strong>: uses an unconditioned room as the test instrument, refits it against outdoor air and attic delta, then replays it with the ceiling coupling cut to R-38. This card has four editable assumptions under the chart (electric rate, cooling days per year, attic area, install cost per square foot). Edit them and the payback math recomputes live; your edits persist in the browser's localStorage. On this house the honest answer was a comfort win and a multi-decade payback on summer AC alone.</li>
+</ul>
+
+<h3>Does wind flush the attic?</h3>
+<p>A scatter of model residuals (how much hotter the attic ran than solar predicts) against wind speed, during solar hours. A downhill slope means breeze helps your attic; a flat line means your vents cannot exhale, no matter the wind. Flat is a useful answer: it says buy intake and exhaust area before buying a fan.</p>
+
+<h3>Room by room</h3>
+<p>One small panel per room, all sharing a single y-axis so rooms compare honestly. Reference zones are labeled "(no attic)".</p>
+
+<figure>
+  <div class="diagram">
+  <svg viewBox="0 0 640 232" role="img" aria-label="Anatomy of a room panel: a thick solid green room line, a dotted grey outdoor line, a dashed grey attic line, a shaded band marking when the room's AC ran, and a header showing the room name with its latest reading.">
+    <!-- panel frame -->
+    <rect x="26" y="38" width="300" height="176" rx="8" fill="#fbfcfe" stroke="#c9d2dd" stroke-width="1.5"/>
+    <text x="40" y="60" class="svg-label" font-size="12" font-weight="700" fill="#1a1a1a">North Bedroom</text>
+    <text x="149" y="60" class="svg-label" font-size="12" fill="#1baf7a" font-weight="700">71.4&#176;F</text>
+    <!-- AC band -->
+    <rect x="214" y="72" width="76" height="130" fill="#2a78d6" opacity="0.12"/>
+    <!-- attic: dashed, faint grey, big afternoon hump -->
+    <polyline points="40,150 70,158 100,142 130,104 160,80 190,76 220,86 250,104 280,124 310,140"
+      fill="none" stroke="#8a93a0" stroke-width="1.5" stroke-dasharray="8 5" opacity="0.6"/>
+    <!-- outdoor: dotted, grey, gentler hump -->
+    <polyline points="40,168 70,172 100,160 130,140 160,126 190,124 220,132 250,146 280,158 310,166"
+      fill="none" stroke="#8a93a0" stroke-width="1.5" stroke-dasharray="2 5" opacity="0.85"/>
+    <!-- room: thick solid green, damped, dips inside AC band -->
+    <polyline points="40,158 70,160 100,156 130,148 160,140 190,136 220,138 250,150 280,152 310,150"
+      fill="none" stroke="#1baf7a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- callouts -->
+    <line x1="190" y1="136" x2="352" y2="96" stroke="#888" stroke-width="1"/>
+    <text x="358" y="92" class="svg-label" font-size="12" font-weight="700" fill="#1a1a1a">Room: thick and solid</text>
+    <text x="358" y="107" class="svg-label" font-size="10.5" fill="#555">the only heavy line in the panel</text>
+
+    <line x1="190" y1="76" x2="352" y2="46" stroke="#888" stroke-width="1"/>
+    <text x="358" y="42" class="svg-label" font-size="12" font-weight="700" fill="#1a1a1a">Attic: long dashes</text>
+    <text x="358" y="57" class="svg-label" font-size="10.5" fill="#555">context, drawn faint</text>
+
+    <line x1="100" y1="160" x2="352" y2="146" stroke="#888" stroke-width="1"/>
+    <text x="358" y="142" class="svg-label" font-size="12" font-weight="700" fill="#1a1a1a">Outdoor: fine dots</text>
+    <text x="358" y="157" class="svg-label" font-size="10.5" fill="#555">context, drawn faint</text>
+
+    <line x1="252" y1="200" x2="352" y2="196" stroke="#888" stroke-width="1"/>
+    <text x="358" y="192" class="svg-label" font-size="12" font-weight="700" fill="#1a1a1a">Shaded band: AC running</text>
+    <text x="358" y="207" class="svg-label" font-size="10.5" fill="#555">derived from measured power draw</text>
+
+    <line x1="120" y1="55" x2="120" y2="26" stroke="#888" stroke-width="1"/>
+    <text x="130" y="24" class="svg-label" font-size="10.5" fill="#555">header shows the latest reading</text>
+  </svg>
+  </div>
+  <figcaption>Line identity is carried by dash pattern and weight, not color alone, so the chart still reads for colorblind viewers and in grayscale print. Hovering any chart shows a crosshair with exact values.</figcaption>
+</figure>
+
+<h3>What the data says</h3>
+<p>The last card turns the window's numbers into sentences: how much the roof added on top of the weather, the attic's lag behind the sun, when outdoor air first dropped below your average room temperature each evening (the moment opening windows starts working), and how your AC energy overlapped solar production. It recomputes with the range filter like everything else.</p>
+
+<h2 id="faq">8. Good to know</h2>
+<dl class="defn">
+  <dt>Is the dashboard live?</dt>
+  <dd>No. It shows the snapshot from the last <code>./run.sh</code>, and the build timestamp is printed in the header. If it looks stale, it is; run it again.</dd>
+  <dt>Can I share the dashboard file?</dt>
+  <dd>Yes, and it will work offline for whoever you send it to. Just know that it embeds your sensor history: room temperatures, AC usage patterns, and effectively when you are home. Share it like a document about your house, because it is one.</dd>
+  <dt>Does it track me?</dt>
+  <dd>No. The built file makes zero network requests, and the fetch script talks only to the <code>HASS_URL</code> you configured.</dd>
+  <dt>The charts render but a series is missing.</dt>
+  <dd>Check the fetch log for <code>WARN</code> lines. A friendly name that matches zero or multiple entities gets skipped, and the dashboard draws what it received without complaint.</dd>
+  <dt>My AC tiles show runtime but no kWh.</dt>
+  <dd>kWh needs a power-metering plug behind that unit, mapped in <code>POWER_AC_SENSORS</code>. Units known only through a climate entity get runtime from state history instead, which trusts the integration more than a watt meter would.</dd>
+  <dt>Why 10-minute buckets?</dt>
+  <dd>Thermal mass is slow. Ten minutes is fine-grained enough to see AC cycles and attic lag, and coarse enough that ten days of eight sensors is a small JSON file inside a fast-loading page.</dd>
+  <dt>How trustworthy are the what-if cards?</dt>
+  <dd>They are fitted first-order models with the fit quality printed under each chart, and they are honest about uncertainty bands. Treat them as "which upgrade deserves a quote," not as engineering. The radiant barrier card exists precisely because the model talked the author out of a purchase.</dd>
+  <dt>Is it safe to re-run whenever?</dt>
+  <dd>Yes. Reads from Home Assistant, overwrites two gitignored files, nothing else. Cron it if you like.</dd>
+</dl>
+
+<hr class="soft">
+<p class="updated">Companion guide to solarGain. If it behaves differently from this guide, the code is the source of truth.</p>
+
+</body>
+</html>

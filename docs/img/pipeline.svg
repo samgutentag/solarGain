@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 664 178" width="664" height="178" role="img" aria-label="The solarGain pipeline: Home Assistant's recorder feeds fetch_history.py, which writes data/history.json; build_dashboard.py injects that JSON into the template and writes dashboard.html. The animation scans each script in turn and checks off each file as it is written; frozen, it shows the completed pipeline.">
+  <!--
+    TIMING (6s loop, one scan = 0.5s = 8.333%):
+      fetch_history.py scans   0% to  8.333%, green at 9.333%
+      history.json glow 10% to 20%, badge at 11.333%
+      build_dashboard.py scans 13.333% to 21.667%, green at 22.667%
+      dashboard.html glow 24% to 34%, badge at 24.667%
+      finished frame HOLDS 24.667% to 100% (about 4.5s linger)
+  -->
+  <style>
+    .bar { transform-box: fill-box; transform-origin: left center; }
+    .barF { animation: sgBarF 6s linear infinite; }
+    .barB { animation: sgBarB 6s linear infinite; }
+    .bdgJ { animation: sgBdgJ 6s linear infinite; }
+    .bdgD { animation: sgBdgD 6s linear infinite; }
+    .gloJ { animation: sgGloJ 6s linear infinite; }
+    .gloD { animation: sgGloD 6s linear infinite; }
+    @keyframes sgBarF { 0% { transform: scaleX(0); fill: #e8932a; } 8.333% { transform: scaleX(1); fill: #e8932a; } 9.333%,100% { transform: scaleX(1); fill: #1d9b54; } }
+    @keyframes sgBarB { 0%,13.333% { transform: scaleX(0); fill: #e8932a; } 21.667% { transform: scaleX(1); fill: #e8932a; } 22.667%,100% { transform: scaleX(1); fill: #1d9b54; } }
+    @keyframes sgBdgJ { 0%,11.333% { opacity: 0; } 13.333%,100% { opacity: 1; } }
+    @keyframes sgBdgD { 0%,24.667% { opacity: 0; } 26.667%,100% { opacity: 1; } }
+    @keyframes sgGloJ { 0%,10% { opacity: 0; } 13% { opacity: 0.35; } 20%,100% { opacity: 0.14; } }
+    @keyframes sgGloD { 0%,24% { opacity: 0; } 27% { opacity: 0.35; } 34%,100% { opacity: 0.14; } }
+    @media (prefers-reduced-motion: reduce) {
+      .barF, .barB, .bdgJ, .bdgD, .gloJ, .gloD { animation: none; }
+      .bar { transform: scaleX(1); fill: #1d9b54; }
+      .bdgJ, .bdgD { opacity: 1; }
+      .gloJ, .gloD { opacity: 0.14; }
+    }
+  </style>
+
+  <rect x="0" y="0" width="664" height="178" rx="10" fill="#ffffff"/>
+  <text x="16" y="26" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12.5" font-weight="700" fill="#3a4350">./run.sh: sensor history in, one HTML file out</text>
+
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <!-- 1. Home Assistant (blue, source) -->
+    <rect x="16" y="58" width="112" height="46" rx="8" fill="#e3edfc" stroke="#346DDB" stroke-width="1.5"/>
+    <text x="72" y="78" text-anchor="middle" font-size="11" font-weight="700" fill="#1f5fc0">Home Assistant</text>
+    <text x="72" y="93" text-anchor="middle" font-size="9" fill="#5b6573">recorder REST API</text>
+
+    <text x="137" y="85" text-anchor="middle" font-size="13" fill="#9aa3b0">&#8594;</text>
+
+    <!-- 2. fetch_history.py (purple, script with scan bar) -->
+    <rect x="146" y="58" width="112" height="46" rx="8" fill="#eee7fb" stroke="#7c5cdb" stroke-width="1.5"/>
+    <text x="202" y="78" text-anchor="middle" font-size="10.5" font-weight="700" fill="#5a3fb0">fetch_history.py</text>
+    <text x="202" y="93" text-anchor="middle" font-size="9" fill="#5b6573">resolve, bucket</text>
+    <rect x="146" y="112" width="112" height="5" rx="2.5" fill="#d9dee6"/>
+    <rect class="bar barF" x="146" y="112" width="112" height="5" rx="2.5" fill="#e8932a"/>
+
+    <text x="267" y="85" text-anchor="middle" font-size="13" fill="#9aa3b0">&#8594;</text>
+
+    <!-- 3. data/history.json (neutral artifact, glow + badge when written) -->
+    <rect x="276" y="58" width="112" height="46" rx="8" fill="#eef1f5" stroke="#9aa3b0" stroke-width="1.5"/>
+    <rect class="gloJ" x="276" y="58" width="112" height="46" rx="8" fill="#7c5cdb" opacity="0"/>
+    <text x="332" y="78" text-anchor="middle" font-size="10.5" font-weight="700" fill="#5b6573">history.json</text>
+    <text x="332" y="93" text-anchor="middle" font-size="9" fill="#5b6573">10-min snapshot</text>
+    <g class="bdgJ" opacity="0"><circle cx="384" cy="60" r="6.5" fill="#1d9b54" stroke="#fff" stroke-width="1.3"/><polyline points="381,60 383,62.4 387,57.6" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+
+    <text x="397" y="85" text-anchor="middle" font-size="13" fill="#9aa3b0">&#8594;</text>
+
+    <!-- 4. build_dashboard.py (teal, script with scan bar) -->
+    <rect x="406" y="58" width="112" height="46" rx="8" fill="#e2f4f1" stroke="#18a394" stroke-width="1.5"/>
+    <text x="462" y="78" text-anchor="middle" font-size="10" font-weight="700" fill="#0e7d70">build_dashboard.py</text>
+    <text x="462" y="93" text-anchor="middle" font-size="9" fill="#5b6573">inject into template</text>
+    <rect x="406" y="112" width="112" height="5" rx="2.5" fill="#d9dee6"/>
+    <rect class="bar barB" x="406" y="112" width="112" height="5" rx="2.5" fill="#e8932a"/>
+
+    <text x="527" y="85" text-anchor="middle" font-size="13" fill="#9aa3b0">&#8594;</text>
+
+    <!-- 5. dashboard.html (green artifact, glow + badge when written) -->
+    <rect x="536" y="58" width="112" height="46" rx="8" fill="#e4f5ea" stroke="#1d9b54" stroke-width="1.5"/>
+    <rect class="gloD" x="536" y="58" width="112" height="46" rx="8" fill="#1d9b54" opacity="0"/>
+    <text x="592" y="78" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1d7a4d">dashboard.html</text>
+    <text x="592" y="93" text-anchor="middle" font-size="9" fill="#5b6573">self-contained</text>
+    <g class="bdgD" opacity="0"><circle cx="644" cy="60" r="6.5" fill="#1d9b54" stroke="#fff" stroke-width="1.3"/><polyline points="641,60 643,62.4 647,57.6" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+
+    <text x="16" y="150" font-size="11.5" fill="#5b6573">Data flows left to right: each script scans for 0.5s, and each file gets a check the moment it is written.</text>
+    <text x="16" y="166" font-size="11.5" fill="#5b6573">The dashboard carries its data inside it, so the finished file works with no server and no network.</text>
+  </g>
+</svg>

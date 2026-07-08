@@ -4,6 +4,11 @@ Quantify how solar gain drives attic and room temperatures in the main house, an
 where portable AC effort is best spent. Data comes from Home Assistant's recorder via the REST
 API; output is a self-contained `dashboard.html`.
 
+![The solarGain pipeline](docs/img/pipeline.svg)
+
+New here? Read the [user guide](docs/user-guide.html) — it covers setup, pointing the sensor
+map at your own house, and how to read every card on the dashboard.
+
 ## Scope
 
 Main structure only: bedroom, north/south bedrooms, both bathrooms, hallway, living room,

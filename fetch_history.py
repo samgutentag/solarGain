@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parent
 DATA_FILE = ROOT / 'data' / 'history.json'
 LOCAL_TZ = ZoneInfo('America/Los_Angeles')
 BUCKET_MINUTES = 10
-DEFAULT_URL = 'http://192.168.1.197:8123'
+DEFAULT_URL = 'http://homeassistant.local:8123'
 
 
 def load_env():

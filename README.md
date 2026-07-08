@@ -4,10 +4,13 @@ Quantify how solar gain drives attic and room temperatures in the main house, an
 where portable AC effort is best spent. Data comes from Home Assistant's recorder via the REST
 API; output is a self-contained `dashboard.html`.
 
-![The solarGain pipeline](docs/img/pipeline.svg)
+![The solarGain pipeline](public/img/pipeline.svg)
 
-New here? Read the [user guide](docs/user-guide.html) — it covers setup, pointing the sensor
-map at your own house, and how to read every card on the dashboard.
+New here? Read the [user guide](https://solargain.gutentag.world/user-guide.html)
+([source](public/user-guide.html)) — it covers setup, pointing the sensor map at your own
+house, and how to read every card on the dashboard. A [demo dashboard built from synthetic
+data](https://solargain.gutentag.world/demo.html) shows what you get without connecting
+anything.
 
 ## Scope
 

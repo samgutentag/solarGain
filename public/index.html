@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>solarGain — measure what the sun costs your house</title>
+<meta name="description" content="Pull temperature, solar, and AC history out of Home Assistant and render a self-contained dashboard that models what a ridge vent, insulation, or radiant barrier would actually do for your house.">
+<meta property="og:title" content="solarGain">
+<meta property="og:description" content="How much of your AC bill is really the roof? Measure it with the sensors you already own.">
+<meta property="og:image" content="img/solargain-card.png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0e1320; color: #e8ecf4;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 56px 24px 80px; }
+  .brand { display: flex; align-items: baseline; gap: 14px; }
+  .brand h1 { font-size: 52px; font-weight: 800; letter-spacing: -1px; }
+  .brand .gain { color: #f5b942; }
+  .sun { font-size: 36px; }
+  .lede { margin-top: 14px; font-size: 24px; color: #aab4c6; max-width: 640px; }
+  .actions { margin-top: 28px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 12px 22px; border-radius: 10px;
+    font-size: 17px; font-weight: 600; text-decoration: none;
+  }
+  .btn.primary { background: #f5b942; color: #241a02; }
+  .btn.ghost { border: 1px solid #3a4763; color: #cdd6e4; }
+  .btn:hover { filter: brightness(1.1); }
+  .shot { margin-top: 44px; }
+  .shot img { width: 100%; max-width: 720px; display: block; margin: 0 auto; border-radius: 16px; border: 1px solid #2a3550; }
+  h2 { margin-top: 56px; font-size: 28px; }
+  p { margin-top: 12px; color: #aab4c6; font-size: 17.5px; max-width: 700px; }
+  p b { color: #e8ecf4; }
+  .pipeline { margin-top: 24px; background: #fff; border-radius: 12px; padding: 8px; }
+  .pipeline svg, .pipeline img { width: 100%; height: auto; display: block; }
+  ul { margin: 14px 0 0 22px; color: #aab4c6; font-size: 17.5px; max-width: 700px; }
+  li { margin-top: 8px; }
+  code { background: #161d2e; border: 1px solid #2a3550; border-radius: 5px; padding: 1px 7px; font-size: .85em; }
+  footer { margin-top: 72px; padding-top: 20px; border-top: 1px solid #2a3550; color: #8a94a8; font-size: 15.5px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+  a { color: #f5b942; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand"><span class="sun">&#9728;&#65039;</span><h1>solar<span class="gain">Gain</span></h1></div>
+  <div class="lede">How much of your AC bill is really the roof? Measure it with the Home Assistant sensors you already own, then model the fixes before paying for them.</div>
+
+  <div class="actions">
+    <a class="btn primary" href="demo.html">View the demo dashboard</a>
+    <a class="btn ghost" href="user-guide.html">Read the user guide</a>
+    <a class="btn ghost" href="https://github.com/samgutentag/solarGain">GitHub</a>
+  </div>
+
+  <div class="shot"><img src="img/solargain-card.png" alt="solarGain summary card: three measured days of attic vs outdoor temperature, plus modeled ridge vent and R-38 insulation scenarios"></div>
+
+  <h2>What it does</h2>
+  <p>solarGain pulls temperature, solar production, wind, and AC power history out of Home Assistant's recorder and renders one self-contained <code>dashboard.html</code>. No server, no chart library, no cloud, and nothing to install beyond Python.</p>
+  <ul>
+    <li><b>Sees the heat tax.</b> The attic peaks 20 to 29&#176;F above the outside air and radiates into the rooms until late evening. The dashboard puts numbers and timestamps on that.</li>
+    <li><b>Uses the solar array as a sunshine meter.</b> Panel production is the irradiance signal the thermal model fits against.</li>
+    <li><b>Models upgrades before you buy them.</b> Ridge vent, R-38 insulation, and radiant barrier scenarios are fitted to your house's own measured response, uncertainty bands included, with editable cost assumptions for the payback math.</li>
+  </ul>
+
+  <h2>How it works</h2>
+  <div class="pipeline"><img src="img/pipeline.svg" alt="Pipeline: Home Assistant recorder feeds fetch_history.py, which writes history.json; build_dashboard.py injects it into the template and writes dashboard.html"></div>
+  <p>Point <code>entities.py</code> at your own sensors, drop a Home Assistant token in <code>.env</code>, and run <code>./run.sh</code>. The <a href="user-guide.html">user guide</a> covers everything, and <code>./run.sh --mock</code> builds the same demo you see here without touching a real house.</p>
+
+  <footer>
+    <span>Built by <a href="https://samgutentag.com">Sam Gutentag</a></span>
+    <span>Demo uses synthetic data &#183; MIT-style: read the repo</span>
+  </footer>
+</div>
+</body>
+</html>

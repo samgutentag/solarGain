@@ -113,7 +113,7 @@
 HASS_TOKEN=eyJhbGciOi...
 HASS_URL=http://homeassistant.local:8123</code></pre></li>
 </ol>
-<div class="warn"><strong>Set <code>HASS_URL</code>.</strong> If you skip it, the fetch script falls back to a hardcoded LAN address that is almost certainly not your Home Assistant. <code>.env</code> is gitignored; keep the token out of commits.</div>
+<div class="warn"><strong>Set <code>HASS_URL</code>.</strong> If you skip it, the fetch script falls back to <code>http://homeassistant.local:8123</code>, which works on many networks but not all; an IP address is more reliable. <code>.env</code> is gitignored; keep the token out of commits.</div>
 <p>Want to see the dashboard before creating a token? <code>./run.sh --mock</code> builds it from synthetic data with the expected physics baked in (a diurnal outdoor sine, a solar bell curve, a lagged attic). It is how the charts were developed before real data existed.</p>
 
 <h2 id="yours">4. Pointing it at your house</h2>
